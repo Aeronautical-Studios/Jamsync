@@ -105,9 +105,6 @@ func (c CustomClaims) HasScope(expectedScope string) bool {
 }
 
 func ParseIdFromCtx(ctx context.Context) (string, error) {
-	if jamenv.Env() == jamenv.Local {
-		return "test@jamhub.dev", nil
-	}
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", errMissingMetadata
@@ -119,6 +116,9 @@ func ParseIdFromCtx(ctx context.Context) (string, error) {
 	}
 
 	token := strings.TrimPrefix(authorizationHeader[0], "Bearer ")
+	if jamenv.Env() == jamenv.Local {
+		return token, nil
+	}
 	validatedClaims, err := ensureValidToken(token)
 	if err != nil {
 		return "", err

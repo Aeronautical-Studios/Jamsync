@@ -9,19 +9,24 @@ import (
 	"github.com/zdgeier/jamhub/internal/jamenv"
 	"github.com/zdgeier/jamhub/internal/jamhubgrpc"
 	"github.com/zdgeier/jamhub/internal/jamhubweb/authenticator"
+	"golang.org/x/oauth2"
 )
 
 func Handler(auth *authenticator.Authenticator) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if jamenv.Env() == jamenv.Local {
 			session := sessions.Default(ctx)
-			session.Set("access_token", "localtoken")
-			session.Set("email", "test@jamhub.dev")
+			username, _ := ctx.GetQuery("username")
+			userId, _ := ctx.GetQuery("userId")
+
+			session.Set("access_token", userId)
+			session.Set("email", username)
 			if err := session.Save(); err != nil {
 				ctx.String(http.StatusInternalServerError, err.Error())
 				return
 			}
-			tempClient, closer, err := jamhubgrpc.Connect(nil)
+			token := &oauth2.Token{AccessToken: userId}
+			tempClient, closer, err := jamhubgrpc.Connect(token)
 			if err != nil {
 				ctx.String(http.StatusInternalServerError, err.Error())
 				return
@@ -29,14 +34,14 @@ func Handler(auth *authenticator.Authenticator) gin.HandlerFunc {
 			defer closer()
 
 			_, err = tempClient.CreateUser(ctx, &pb.CreateUserRequest{
-				Username: "test@jamhub.dev",
+				Username: username,
 			})
 			if err != nil {
 				ctx.String(http.StatusInternalServerError, err.Error())
 				return
 			}
 
-			ctx.Redirect(http.StatusTemporaryRedirect, "/test@jamhub.dev/projects")
+			ctx.Redirect(http.StatusTemporaryRedirect, username+"/projects")
 			return
 		}
 

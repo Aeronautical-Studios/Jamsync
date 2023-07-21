@@ -12,6 +12,8 @@ service JamHub {
     rpc GetProjectId(GetProjectIdRequest) returns (GetProjectIdResponse);
     rpc GetProjectCurrentCommit(GetProjectCurrentCommitRequest) returns (GetProjectCurrentCommitResponse);
     rpc GetProjectName(GetProjectNameRequest) returns (GetProjectNameResponse);
+    rpc AddCollaborator(AddCollaboratorRequest) returns (AddCollaboratorResponse);
+    rpc GetCollaborators(GetCollaboratorsRequest) returns (GetCollaboratorsResponse);
     // rpc GetProjectConfig(GetProjectConfigRequest) returns (ProjectConfig);
 
     // Change operations
@@ -41,7 +43,8 @@ service JamHub {
 
 message GetWorkspaceNameRequest {
     uint64 project_id = 1;
-    uint64 workspace_id = 2;
+    string owner_username = 2;
+    uint64 workspace_id = 3;
 }
 
 message GetWorkspaceNameResponse {
@@ -50,7 +53,8 @@ message GetWorkspaceNameResponse {
 
 message GetWorkspaceIdRequest {
     uint64 project_id = 1;
-    string workspace_name = 2;
+    string owner_username = 2;
+    string workspace_name = 3;
 }
 
 message GetWorkspaceIdResponse {
@@ -59,7 +63,8 @@ message GetWorkspaceIdResponse {
 
 message GetWorkspaceCurrentChangeRequest {
     uint64 project_id = 1;
-    uint64 workspace_id = 2;
+    string owner_username  = 2;
+    uint64 workspace_id = 3;
 }
 
 message GetWorkspaceCurrentChangeResponse {
@@ -68,6 +73,7 @@ message GetWorkspaceCurrentChangeResponse {
 
 message GetProjectCurrentCommitRequest {
     uint64 project_id = 1;
+    string owner_username  = 2;
 }
 
 message GetProjectCurrentCommitResponse {
@@ -77,6 +83,7 @@ message GetProjectCurrentCommitResponse {
 
 message GetProjectNameRequest {
     uint64 project_id = 1;
+    string owner_username  = 2;
 }
 
 message GetProjectNameResponse {
@@ -84,7 +91,8 @@ message GetProjectNameResponse {
 }
 
 message GetProjectIdRequest {
-    string project_name = 1;
+    string owner_username  = 1;
+    string project_name = 2;
 }
 
 message GetProjectIdResponse {
@@ -93,6 +101,7 @@ message GetProjectIdResponse {
 
 message EditorStreamMessage{
     uint64 project_id = 1;
+    string owner_username  = 2;
     bytes update_data = 3;
 }
 
@@ -115,10 +124,10 @@ message FileMetadataDiff {
 
 message WorkspaceOperationLocations {
     uint64 project_id = 1;
-    string owner_id = 2;
-    bytes path_hash = 3;
-    uint64 workspace_id = 4;
-    uint64 change_id = 5;
+    string owner_username  = 2;
+    bytes path_hash = 4;
+    uint64 workspace_id = 5;
+    uint64 change_id = 6;
     message OperationLocation {
         uint64 offset = 1;
         uint64 length = 2;
@@ -126,25 +135,26 @@ message WorkspaceOperationLocations {
         uint64 commit_offset = 4;
         uint64 commit_length = 5;
     }
-    repeated OperationLocation opLocs = 6;
+    repeated OperationLocation opLocs = 7;
 }
 
 message CommitOperationLocations {
     uint64 project_id = 1;
-    string owner_id = 2;
-    bytes path_hash = 3;
-    uint64 commit_id = 4;
+    string owner_username  = 2;
+    bytes path_hash = 4;
+    uint64 commit_id = 5;
     message OperationLocation {
         uint64 offset = 1;
         uint64 length = 2;
         ChunkHash chunk_hash = 3;
     }
-    repeated OperationLocation opLocs = 5;
+    repeated OperationLocation opLocs = 6;
 }
 
 message MergeWorkspaceRequest {
     uint64 project_id = 1;
-    uint64 workspace_id = 2;
+    string owner_username  = 2;
+    uint64 workspace_id = 3;
 }
 message MergeWorkspaceResponse {
     uint64 commit_id = 1;
@@ -152,7 +162,8 @@ message MergeWorkspaceResponse {
 
 message CreateWorkspaceRequest {
     uint64 project_id = 1;
-    string workspaceName = 2;
+    string owner_username  = 2;
+    string workspaceName = 3;
 }
 message CreateWorkspaceResponse {
     uint64 workspace_id = 1;
@@ -160,7 +171,8 @@ message CreateWorkspaceResponse {
 
 message ListWorkspacesRequest {
     uint64 project_id = 1;
-    string project_name = 2;
+    string owner_username = 2;
+    string project_name = 3;
 }
 message ListWorkspacesResponse {
     map<string, uint64> workspaces = 1;
@@ -168,20 +180,23 @@ message ListWorkspacesResponse {
 
 message WorkspaceFileOperation {
     uint64 project_id = 1;
-    uint64 workspace_id = 2;
-    uint64 change_id = 3;
-    bytes path_hash = 4;
-    Operation op = 5;
+    string owner_username  = 2;
+    uint64 workspace_id = 3;
+    uint64 change_id = 4;
+    bytes path_hash = 5;
+    Operation op = 6;
 }
 
 message CommittedFileOperation {
     uint64 project_id = 1;
-    bytes path_hash = 2;
-    Operation op = 3;
+    string owner_username  = 2;
+    bytes path_hash = 3;
+    Operation op = 4;
 }
 
 message Operation {
     uint64 project_id = 1;
+string owner_username  = 2;
     bytes path_hash = 3;
     enum Type {
         OpBlock = 0;
@@ -202,14 +217,31 @@ message FileMetadata {
     map<string, File> files = 1;
 }
 
+message GetCollaboratorsRequest {
+    uint64 project_id = 1;
+    string owner_username  = 2;
+}
+message GetCollaboratorsResponse {
+    repeated string usernames = 1;
+}
+
+message AddCollaboratorRequest {
+    uint64 project_id = 1;
+    string owner_username  = 2;
+    string username = 3;
+}
+message AddCollaboratorResponse {}
+
 message AddProjectRequest {
     string project_name = 1;
 }
 message AddProjectResponse {
     uint64 project_id = 1;
+    string owner_username  = 2;
 }
 
 message DeleteWorkspaceRequest {
+    string owner_username  =1;
     uint64 project_id = 2;
     uint64 workspace_id = 3;
 }
@@ -217,7 +249,8 @@ message DeleteWorkspaceResponse {}
 
 message GetWorkspaceRequest {
     uint64 project_id = 1;
-    string workspace_name = 2;
+    string owner_username  = 2;
+    string workspace_name = 3;
 }
 message GetWorkspaceResponse {
     uint64 workspace_id = 1;
@@ -233,11 +266,15 @@ message DeleteProjectResponse {
     uint64 project_id = 2;
 }
 
-message ListUserProjectsRequest {}
+message ListUserProjectsRequest {
+    string owner_username = 1;
+}
+
 message ListUserProjectsResponse {
     message Project {
         string name = 1;
         uint64 id = 2;
+        string owner_username = 3;
     }
     repeated Project projects = 1;
 }
@@ -265,18 +302,6 @@ message BrowseProjectResponse {
     repeated string files = 2;
 }
 
-// message GetProjectConfigRequest {
-//     string project_name = 1;
-//     uint64 project_id = 2;
-//     string workspace_name = 3;
-// }
-// 
-// message ProjectConfig {
-//     uint64 projectId = 1;
-//     uint64 workspaceId = 2;
-//     string project_name = 4;
-// }
-
 message PingRequest {}
 message PingResponse {
     string username = 1;
@@ -298,27 +323,30 @@ message Chunk {
 
 message ReadCommittedFileRequest {
     uint64 project_id = 1;
-    uint64 commit_id = 2;
-    bytes path_hash = 3;
-    google.protobuf.Timestamp mod_time = 4; 
-    repeated ChunkHash chunk_hashes = 5;
-}
-
-message ReadWorkspaceFileRequest {
-    uint64 project_id = 1;
-    uint64 workspace_id = 2;
-    uint64 change_id = 3;
+    string owner_username  = 2;
+    uint64 commit_id = 3;
     bytes path_hash = 4;
     google.protobuf.Timestamp mod_time = 5; 
     repeated ChunkHash chunk_hashes = 6;
 }
 
+message ReadWorkspaceFileRequest {
+    uint64 project_id = 1;
+    string owner_username  = 2;
+    uint64 workspace_id = 3;
+    uint64 change_id = 4;
+    bytes path_hash = 5;
+    google.protobuf.Timestamp mod_time = 6; 
+    repeated ChunkHash chunk_hashes = 7;
+}
+
 message ReadWorkspaceChunkHashesRequest {
     uint64 project_id = 1;
-    uint64 workspace_id = 2;
-    uint64 change_id = 3;
-    bytes path_hash = 4;
-    google.protobuf.Timestamp mod_time = 5; 
+    string owner_username  = 2;
+    uint64 workspace_id = 3;
+    uint64 change_id = 4;
+    bytes path_hash = 5;
+    google.protobuf.Timestamp mod_time = 6; 
 }
 
 message ReadWorkspaceChunkHashesResponse {
@@ -327,9 +355,10 @@ message ReadWorkspaceChunkHashesResponse {
 
 message ReadCommitChunkHashesRequest {
     uint64 project_id = 1;
-    uint64 commit_id = 2;
-    bytes path_hash = 3;
-    google.protobuf.Timestamp mod_time = 4; 
+    string owner_username  = 2;
+    uint64 commit_id = 3;
+    bytes path_hash = 4;
+    google.protobuf.Timestamp mod_time = 5; 
 }
 
 message ReadCommitChunkHashesResponse {
@@ -338,12 +367,14 @@ message ReadCommitChunkHashesResponse {
 
 message ListWorkspaceOperationLocationsRequest {
     uint64 project_id = 1;
-    string path = 2;
-    uint64 workspace_id = 3;
+    string owner_username  = 2;
+    string path = 3;
+    uint64 workspace_id = 4;
 }
 
 message ListCommitOperationLocationsRequest {
     uint64 project_id = 1;
-    string path = 2;
-    uint64 commit_id = 3;
+    string owner_username  = 2;
+    string path = 3;
+    uint64 commit_id = 4;
 }

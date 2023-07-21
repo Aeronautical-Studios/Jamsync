@@ -15,7 +15,7 @@ import (
 func Status() {
 	state, err := statefile.Find()
 	if err != nil {
-		fmt.Println("Could not find a `.jamhub` file. Run `jam init` to initialize the project.")
+		fmt.Println("Could not find a `.jam` file. Run `jam init` to initialize the project.")
 		return
 	}
 
@@ -33,7 +33,8 @@ func Status() {
 	defer closer()
 
 	nameResp, err := apiClient.GetProjectName(context.Background(), &pb.GetProjectNameRequest{
-		ProjectId: state.ProjectId,
+		OwnerUsername: state.OwnerUsername,
+		ProjectId:     state.ProjectId,
 	})
 	if err != nil {
 		panic(err)
@@ -42,8 +43,9 @@ func Status() {
 
 	if state.WorkspaceInfo != nil {
 		workspaceNameResp, err := apiClient.GetWorkspaceName(context.Background(), &pb.GetWorkspaceNameRequest{
-			ProjectId:   state.ProjectId,
-			WorkspaceId: state.WorkspaceInfo.WorkspaceId,
+			ProjectId:     state.ProjectId,
+			OwnerUsername: state.OwnerUsername,
+			WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
 		})
 		if err != nil {
 			panic(err)
@@ -55,14 +57,14 @@ func Status() {
 			state.WorkspaceInfo.ChangeId,
 		)
 
-		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
+		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
 		if err != nil {
 			panic(err)
 		}
 
 		if changeResp.ChangeId == state.WorkspaceInfo.ChangeId {
 			fileMetadata := ReadLocalFileList()
-			localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+			localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -80,7 +82,7 @@ func Status() {
 			}
 		} else if changeResp.ChangeId > state.WorkspaceInfo.ChangeId {
 			fileMetadata := ReadLocalFileList()
-			remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+			remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}

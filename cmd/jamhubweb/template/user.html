@@ -17,9 +17,10 @@
     <script>
         let splitPath = window.location.pathname.split("/");
         let projectUrl =  splitPath.slice(0, 2).join('/');
+        let user = splitPath[1];
 
         async function populateProjectListEl() {
-            let projectsResp = await fetch("/api/userprojects");
+            let projectsResp = await fetch("/api/users/" + user);
             let projectsJson = await projectsResp.json();
 
             if (Object.keys(projectsJson).length === 0) {
@@ -31,8 +32,8 @@
             for (let project of projectsJson.projects) {
                 let temp = document.createElement("li");
                 let projectLink = document.createElement("a");
-                projectLink.href = projectUrl + `/${project.name}/committedfiles/`;
-                projectLink.innerHTML = project.name;
+                projectLink.href = `/${project.owner_username}/${project.name}/committedfiles/`;
+                projectLink.innerHTML = project.owner_username + "/" + project.name;
                 temp.appendChild(projectLink);
                 frag.appendChild(temp);
             }

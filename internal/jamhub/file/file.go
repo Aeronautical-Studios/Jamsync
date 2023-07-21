@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func DownloadCommittedFile(client pb.JamHubClient, projectId uint64, commitId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
+func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
 	sig := make([]*pb.ChunkHash, 0)
 	localChunker, err := fastcdc.NewChunker(localReader, fastcdc.Options{
 		AverageSize: 1024 * 64,
@@ -30,11 +30,12 @@ func DownloadCommittedFile(client pb.JamHubClient, projectId uint64, commitId ui
 	}
 
 	stream, err := client.ReadCommittedFile(context.TODO(), &pb.ReadCommittedFileRequest{
-		ProjectId:   projectId,
-		CommitId:    commitId,
-		PathHash:    pathToHash(filePath),
-		ModTime:     timestamppb.Now(),
-		ChunkHashes: sig,
+		ProjectId:     projectId,
+		OwnerUsername: ownerUsername,
+		CommitId:      commitId,
+		PathHash:      pathToHash(filePath),
+		ModTime:       timestamppb.Now(),
+		ChunkHashes:   sig,
 	})
 	if err != nil {
 		return err
@@ -67,7 +68,7 @@ func DownloadCommittedFile(client pb.JamHubClient, projectId uint64, commitId ui
 	return err
 }
 
-func DownloadWorkspaceFile(client pb.JamHubClient, projectId uint64, workspaceId uint64, changeId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
+func DownloadWorkspaceFile(client pb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
 	sig := make([]*pb.ChunkHash, 0)
 	localChunker, err := fastcdc.NewChunker(localReader, fastcdc.Options{
 		AverageSize: 1024 * 64,
@@ -86,12 +87,13 @@ func DownloadWorkspaceFile(client pb.JamHubClient, projectId uint64, workspaceId
 	}
 
 	stream, err := client.ReadWorkspaceFile(context.TODO(), &pb.ReadWorkspaceFileRequest{
-		ProjectId:   projectId,
-		WorkspaceId: workspaceId,
-		ChangeId:    changeId,
-		PathHash:    pathToHash(filePath),
-		ModTime:     timestamppb.Now(),
-		ChunkHashes: sig,
+		ProjectId:     projectId,
+		OwnerUsername: ownerUsername,
+		WorkspaceId:   workspaceId,
+		ChangeId:      changeId,
+		PathHash:      pathToHash(filePath),
+		ModTime:       timestamppb.Now(),
+		ChunkHashes:   sig,
 	})
 	if err != nil {
 		return err

@@ -50,11 +50,11 @@ func (s *LocalOpLocStore) InsertOperationLocations(opLocs *pb.CommitOperationLoc
 		currFile *os.File
 		err      error
 	)
-	err = os.MkdirAll(s.fileDir(opLocs.GetOwnerId(), opLocs.GetProjectId(), opLocs.GetCommitId(), opLocs.GetPathHash()), os.ModePerm)
+	err = os.MkdirAll(s.fileDir(opLocs.GetOwnerUsername(), opLocs.GetProjectId(), opLocs.GetCommitId(), opLocs.GetPathHash()), os.ModePerm)
 	if err != nil {
 		return err
 	}
-	filePath := s.filePath(opLocs.GetOwnerId(), opLocs.GetProjectId(), opLocs.GetCommitId(), opLocs.GetPathHash())
+	filePath := s.filePath(opLocs.GetOwnerUsername(), opLocs.GetProjectId(), opLocs.GetCommitId(), opLocs.GetPathHash())
 	if s.cache.Contains(filePath) {
 		currFile, _ = s.cache.Get(filePath)
 	} else {

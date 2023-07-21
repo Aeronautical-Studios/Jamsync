@@ -18,7 +18,25 @@ func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *pb.GetProjectCu
 		return nil, err
 	}
 
-	commitId, err := s.oplocstorecommit.MaxCommitId(userId, in.ProjectId)
+	if in.GetOwnerUsername() == "" {
+		return nil, errors.New("must provide owner id")
+	}
+
+	username, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), username)
+	if err != nil {
+		return nil, err
+	}
+
+	if !accessible {
+		return nil, errors.New("must be an owner or collaborator to get current commit")
+	}
+
+	commitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.ProjectId)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +54,24 @@ func (s JamHub) ReadCommitChunkHashes(ctx context.Context, in *pb.ReadCommitChun
 		}
 	}
 
-	targetBuffer, err := s.regenCommittedFile(userId, in.GetProjectId(), in.GetCommitId(), in.GetPathHash())
+	if in.GetOwnerUsername() == "" {
+		return nil, errors.New("must provide owner id")
+	}
+	username, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), username)
+	if err != nil {
+		return nil, err
+	}
+
+	if !accessible {
+		return nil, errors.New("must be an owner or collaborator to get current commit")
+	}
+
+	targetBuffer, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), in.GetCommitId(), in.GetPathHash())
 	if err != nil {
 		return nil, err
 	}
@@ -58,11 +93,11 @@ func (s JamHub) ReadCommitChunkHashes(ctx context.Context, in *pb.ReadCommitChun
 	}, err
 }
 
-func (s JamHub) regenCommittedFile(userId string, projectId uint64, commitId uint64, pathHash []byte) (*bytes.Reader, error) {
+func (s JamHub) regenCommittedFile(ownerUsername string, projectId uint64, commitId uint64, pathHash []byte) (*bytes.Reader, error) {
 	var err error
 	var operationLocations *pb.CommitOperationLocations
 	for i := int(commitId); i >= 0 && operationLocations == nil; i-- {
-		operationLocations, err = s.oplocstorecommit.ListOperationLocations(userId, projectId, uint64(i), pathHash)
+		operationLocations, err = s.oplocstorecommit.ListOperationLocations(ownerUsername, projectId, uint64(i), pathHash)
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +109,7 @@ func (s JamHub) regenCommittedFile(userId string, projectId uint64, commitId uin
 	ops := make(chan *pb.Operation)
 	go func() {
 		for _, loc := range operationLocations.GetOpLocs() {
-			op, err := s.opdatastorecommit.Read(userId, projectId, pathHash, loc.GetOffset(), loc.GetLength())
+			op, err := s.opdatastorecommit.Read(ownerUsername, projectId, pathHash, loc.GetOffset(), loc.GetLength())
 			if err != nil {
 				log.Panic(err)
 			}
@@ -106,16 +141,33 @@ func (s JamHub) ReadCommittedFile(in *pb.ReadCommittedFileRequest, srv pb.JamHub
 		return err
 	}
 
+	if in.GetOwnerUsername() == "" {
+		return errors.New("must provide owner id")
+	}
+	username, err := s.db.GetUsername(userId)
+	if err != nil {
+		return err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), username)
+	if err != nil {
+		return err
+	}
+
+	if !accessible {
+		return errors.New("not a collaborator or owner of this project")
+	}
+
 	commitId := in.GetCommitId()
 	if commitId == 0 {
-		maxCommitId, err := s.oplocstorecommit.MaxCommitId(userId, in.GetProjectId())
+		maxCommitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.GetProjectId())
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 		commitId = maxCommitId
 	}
 
-	sourceBuffer, err := s.regenCommittedFile(userId, in.GetProjectId(), commitId, in.GetPathHash())
+	sourceBuffer, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), commitId, in.GetPathHash())
 	if err != nil {
 		return err
 	}
@@ -155,9 +207,10 @@ func (s JamHub) ReadCommittedFile(in *pb.ReadCommittedFileRequest, srv pb.JamHub
 
 	for op := range opsOut {
 		err = srv.Send(&pb.CommittedFileOperation{
-			ProjectId: in.GetProjectId(),
-			PathHash:  in.GetPathHash(),
-			Op:        op,
+			ProjectId:     in.GetProjectId(),
+			OwnerUsername: in.GetOwnerUsername(),
+			PathHash:      in.GetPathHash(),
+			Op:            op,
 		})
 		if err != nil {
 			return err
@@ -174,8 +227,26 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 		}
 	}
 
+	if in.GetOwnerUsername() == "" {
+		return nil, errors.New("must provide owner id")
+	}
+
+	username, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), username)
+	if err != nil {
+		return nil, err
+	}
+
+	if !accessible {
+		return nil, errors.New("must be owner or collaborator to merge")
+	}
+
 	isFirstCommit := false
-	prevCommitId, err := s.oplocstorecommit.MaxCommitId(userId, in.GetProjectId())
+	prevCommitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.GetProjectId())
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		isFirstCommit = true
 	} else if err != nil {
@@ -183,7 +254,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 	}
 
 	// Regen every file that has been changed in workspace
-	changedPathHashes, err := s.opdatastoreworkspace.GetChangedPathHashes(userId, in.GetProjectId(), in.GetWorkspaceId())
+	changedPathHashes, err := s.opdatastoreworkspace.GetChangedPathHashes(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -192,7 +263,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 		return &pb.MergeWorkspaceResponse{CommitId: prevCommitId}, nil
 	}
 
-	maxChangeId, err := s.oplocstoreworkspace.MaxChangeId(userId, in.GetProjectId(), in.GetWorkspaceId())
+	maxChangeId, err := s.oplocstoreworkspace.MaxChangeId(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
 	if err != nil {
 		return nil, err
 	}
@@ -202,20 +273,19 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 
 	makeDiff := func() {
 		for changedPathHash := range pathHashes {
-			sourceReader, err := s.regenWorkspaceFile(userId, in.GetProjectId(), in.GetWorkspaceId(), maxChangeId, changedPathHash)
+			sourceReader, err := s.regenWorkspaceFile(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxChangeId, changedPathHash)
 			if err != nil {
-				results <- err
-				return
+				panic(err)
 			}
 
 			workspaceOperationLocations, err := s.ReadCommitChunkHashes(ctx, &pb.ReadCommitChunkHashesRequest{
-				ProjectId: in.GetProjectId(),
-				CommitId:  prevCommitId,
-				PathHash:  []byte(changedPathHash),
+				ProjectId:     in.GetProjectId(),
+				OwnerUsername: in.GetOwnerUsername(),
+				CommitId:      prevCommitId,
+				PathHash:      []byte(changedPathHash),
 			})
 			if err != nil {
-				results <- err
-				return
+				panic(err)
 			}
 
 			sourceChunker, err := fastcdc.NewChunker(sourceReader, fastcdc.Options{
@@ -223,8 +293,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 				Seed:        84372,
 			})
 			if err != nil {
-				results <- err
-				return
+				panic(err)
 			}
 
 			opsOut := make(chan *pb.Operation)
@@ -252,10 +321,9 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 
 			pathHashToOpLocs := make(map[string][]*pb.CommitOperationLocations_OperationLocation, 0)
 			for op := range opsOut {
-				offset, length, err := s.opdatastorecommit.Write(userId, in.GetProjectId(), []byte(changedPathHash), op)
+				offset, length, err := s.opdatastorecommit.Write(username, in.GetProjectId(), []byte(changedPathHash), op)
 				if err != nil {
-					results <- err
-					return
+					panic(err)
 				}
 
 				var chunkHash *pb.ChunkHash
@@ -274,10 +342,9 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 				}
 
 				if op.GetType() == pb.Operation_OpBlock {
-					opLocs, err := s.oplocstorecommit.ListOperationLocations(userId, in.GetProjectId(), prevCommitId, []byte(changedPathHash))
+					opLocs, err := s.oplocstorecommit.ListOperationLocations(in.GetOwnerUsername(), in.GetProjectId(), prevCommitId, []byte(changedPathHash))
 					if err != nil {
-						results <- err
-						return
+						panic(err)
 					}
 					found := false
 					var reusedOffset, reusedLength uint64
@@ -307,29 +374,27 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 			if isFirstCommit {
 				for pathHash, opLocs := range pathHashToOpLocs {
 					err = s.oplocstorecommit.InsertOperationLocations(&pb.CommitOperationLocations{
-						ProjectId: in.GetProjectId(),
-						OwnerId:   userId,
-						CommitId:  0,
-						PathHash:  []byte(pathHash),
-						OpLocs:    opLocs,
+						ProjectId:     in.GetProjectId(),
+						OwnerUsername: in.GetOwnerUsername(),
+						CommitId:      0,
+						PathHash:      []byte(pathHash),
+						OpLocs:        opLocs,
 					})
 					if err != nil {
-						results <- err
-						return
+						panic(err)
 					}
 				}
 			} else {
 				for pathHash, opLocs := range pathHashToOpLocs {
 					err = s.oplocstorecommit.InsertOperationLocations(&pb.CommitOperationLocations{
-						ProjectId: in.GetProjectId(),
-						OwnerId:   userId,
-						CommitId:  prevCommitId + 1,
-						PathHash:  []byte(pathHash),
-						OpLocs:    opLocs,
+						ProjectId:     in.GetProjectId(),
+						OwnerUsername: in.GetOwnerUsername(),
+						CommitId:      prevCommitId + 1,
+						PathHash:      []byte(pathHash),
+						OpLocs:        opLocs,
 					})
 					if err != nil {
-						results <- err
-						return
+						panic(err)
 					}
 				}
 

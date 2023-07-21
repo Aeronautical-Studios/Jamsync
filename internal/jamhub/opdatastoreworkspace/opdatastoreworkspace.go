@@ -55,7 +55,7 @@ func (s *LocalStore) Read(ownerId string, projectId, workspaceId uint64, pathHas
 	} else {
 		currFile, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 		if err != nil {
-			return nil, err
+			log.Panic(err)
 		}
 		s.cache.Add(filePath, currFile)
 	}
@@ -63,7 +63,16 @@ func (s *LocalStore) Read(ownerId string, projectId, workspaceId uint64, pathHas
 	b := make([]byte, length)
 	_, err = currFile.ReadAt(b, int64(offset))
 	if err != nil {
-		return nil, err
+		// Sometimes we get errors here for some reason so we just try again
+		currFile, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+		if err != nil {
+			log.Panic(err)
+		}
+		s.cache.Add(filePath, currFile)
+		_, err = currFile.ReadAt(b, int64(offset))
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 	s.mu.Unlock()
 
@@ -78,7 +87,7 @@ func (s *LocalStore) Read(ownerId string, projectId, workspaceId uint64, pathHas
 func (s *LocalStore) Write(ownerId string, projectId, workspaceId uint64, pathHash []byte, op *pb.Operation) (offset uint64, length uint64, err error) {
 	err = os.MkdirAll(s.fileDir(ownerId, projectId, workspaceId, pathHash), os.ModePerm)
 	if err != nil {
-		return 0, 0, err
+		log.Panic(err)
 	}
 
 	filePath := s.filePath(ownerId, projectId, workspaceId, pathHash)
@@ -88,7 +97,7 @@ func (s *LocalStore) Write(ownerId string, projectId, workspaceId uint64, pathHa
 	} else {
 		currFile, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 		if err != nil {
-			return 0, 0, err
+			log.Panic(err)
 		}
 		s.cache.Add(filePath, currFile)
 	}
@@ -97,15 +106,15 @@ func (s *LocalStore) Write(ownerId string, projectId, workspaceId uint64, pathHa
 	defer s.mu.Unlock()
 	info, err := currFile.Stat()
 	if err != nil {
-		return 0, 0, err
+		log.Panic(err)
 	}
 	data, err := proto.Marshal(op)
 	if err != nil {
-		return 0, 0, err
+		log.Panic(err)
 	}
 	writtenBytes, err := currFile.Write(data)
 	if err != nil {
-		return 0, 0, err
+		log.Panic(err)
 	}
 	return uint64(info.Size()), uint64(writtenBytes), nil
 }

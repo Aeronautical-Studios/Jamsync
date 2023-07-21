@@ -15,7 +15,7 @@ import (
 func Pull() {
 	state, err := statefile.Find()
 	if err != nil {
-		fmt.Println("Could not find a `.jamhub` file. Run `jam init` to initialize the project.")
+		fmt.Println("Could not find a `.jam` file. Run `jam init` to initialize the project.")
 		return
 	}
 
@@ -39,13 +39,13 @@ func Pull() {
 		}
 
 		fileMetadata := ReadLocalFileList()
-		remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.GetChangeId(), fileMetadata)
+		remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.GetChangeId(), fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}
 
 		if DiffHasChanges(remoteToLocalDiff) {
-			err = ApplyFileListDiffWorkspace(apiClient, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.GetChangeId(), remoteToLocalDiff)
+			err = ApplyFileListDiffWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.GetChangeId(), remoteToLocalDiff)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -58,7 +58,8 @@ func Pull() {
 			fmt.Println("No changes to pull")
 		}
 		err = statefile.StateFile{
-			ProjectId: state.ProjectId,
+			OwnerUsername: state.OwnerUsername,
+			ProjectId:     state.ProjectId,
 			WorkspaceInfo: &statefile.WorkspaceInfo{
 				WorkspaceId: state.WorkspaceInfo.WorkspaceId,
 				ChangeId:    changeResp.ChangeId,
@@ -74,13 +75,13 @@ func Pull() {
 		}
 
 		fileMetadata := ReadLocalFileList()
-		remoteToLocalDiff, err := DiffRemoteToLocalCommit(apiClient, state.ProjectId, commitResp.CommitId, fileMetadata)
+		remoteToLocalDiff, err := DiffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, commitResp.CommitId, fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}
 
 		if DiffHasChanges(remoteToLocalDiff) {
-			err = ApplyFileListDiffCommit(apiClient, state.ProjectId, commitResp.CommitId, remoteToLocalDiff)
+			err = ApplyFileListDiffCommit(apiClient, state.OwnerUsername, state.ProjectId, commitResp.CommitId, remoteToLocalDiff)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -94,7 +95,8 @@ func Pull() {
 		}
 
 		err = statefile.StateFile{
-			ProjectId: state.ProjectId,
+			OwnerUsername: state.OwnerUsername,
+			ProjectId:     state.ProjectId,
 			CommitInfo: &statefile.CommitInfo{
 				CommitId: commitResp.CommitId,
 			},

@@ -41,7 +41,7 @@
             <p class="About-description">
                 It's time for a free and open source collaboration system for game developers. Current closed-source
                 systems, like Perforce and Plastic/Unity DevOps,
-                are expensive, complex, and limit their users. Current open-source solutions, like Git or SVN, are
+                are expensive and complex. Current open-source solutions, like Git or SVN, are
                 difficult to use
                 and do not scale
                 with large projects containing large files. Game developers want to focus on their game, not their
@@ -49,18 +49,14 @@
             </p>
 
             <p>
-                JamHub is a free and open source version control system that uses modern <a href="#algorithm">Content
-                    Defined
-                    Chunking</a>
-                strategies to efficiently track changes to large files and large projects. Currently it's around 2x-10x
-                faster than Git. You can try out a hosted alpha version on this site by
+                JamHub is an <a href="https://www.gnu.org/licenses/agpl-3.0.en.html">AGPL-licensed</a> version control system that efficiently tracks changes to large files and large projects.
+                You can try it out by
                 <a href="/login">logging in</a> or check out the <a
                     href="https://github.com/zdgeier/jamhub">AGPL-licensed source on
                     Github</a>.
             </p>
             <p class="About-description">
-                You can <a href="https://discord.gg/6bK3GPKhpa">join the Discord</a> for updates or to get support. If you have any questions
-                or a problem I can help solve, please email me at <a href="zach@jamhub.dev">zach@jamhub.dev</a>.
+                <a href="https://discord.gg/6bK3GPKhpa">Join the Discord</a> for updates or to get support.
             </p>
             <h2>Problem</h2>
             <p class="About-description">
@@ -98,7 +94,8 @@
                     <p>Perforce is widely used in the professional games industry, but it's expensive,
                         closed-source, and still has <a href="https://news.ycombinator.com/item?id=9138559">many</a> <a
                             href="https://weblog.masukomi.org/2007/08/31/dear-perforce-fuck-you/">issues</a>. Game
-                        developers, as well as other developers in other industries, are looking for easy ways to collaborate
+                        developers, as well as other developers in other industries, are looking for easy ways to
+                        collaborate
                         with other people without having to go through a sales person.</p>
                 </li>
                 <li>
@@ -167,12 +164,14 @@
             <p class="About-description">
                 JamHub is an in-development fourth generation version control system that is being built for game
                 developers.
-                You can currently do things most that you would expect from a current version control system, like pulling,
+                You can currently do things most that you would expect from a current version control system, like
+                pulling,
                 pushing, workspaceing, and merging, but it's not quite ready for production use -- expect some bugs. The
                 core algorithm
                 has been implemented but there's more work remaining to build out features that developers expect from a
                 full collaboration
-                platform. Please <a href="https://discord.gg/6bK3GPKhpa">join the Discord</a> and <a href="https://github.com/zdgeier/jamhub">star the repo in Github</a> to follow development.
+                platform. Please <a href="https://discord.gg/6bK3GPKhpa">join the Discord</a> and <a
+                    href="https://github.com/zdgeier/jamhub">star the repo in Github</a> to follow development.
             </p>
             <h3>Terminology</h3>
             <p class="About-description">
@@ -182,12 +181,16 @@
                 <li><b>Mainline</b> - The production history of the project. Made up of a series of "commits" that
                     represent good versions of the project.</li>
                 <li><b>Workspace</b> - A workspace for developers to make changes in. Developers will make "changes" in
-                    their workspace and merge into the "mainline" when approved/ready. "Changes" will be tracked while in
-                    the workspace, but will be squashed into a single "commit" when merged into the mainline. Eventually,
+                    their workspace and merge into the "mainline" when approved/ready. "Changes" will be tracked while
+                    in
+                    the workspace, but will be squashed into a single "commit" when merged into the mainline.
+                    Eventually,
                     changes will be able to be synced live between local developer machine and their workspace.</li>
-                <li><b>Change</b> - A snapshot of a workspace while developers are working on their project, made by doing
+                <li><b>Change</b> - A snapshot of a workspace while developers are working on their project, made by
+                    doing
                     a `jam push`. </li>
-                <li><b>Commit</b> - A snapshot of the production version of the project, made by merging in a "workspace".
+                <li><b>Commit</b> - A snapshot of the production version of the project, made by merging in a
+                    "workspace".
                 </li>
                 <li><b>Merge</b> - Occurs when a workspace is squashed and committed to the "mainline".</li>
             </ul>
@@ -324,7 +327,8 @@
             <p class="About-description">
                 A chain of changes, formed by the process above, can be used to regenerate every file in a project.
                 Workspaces can be automatically rebased on top of the mainline.
-                This means that every workspace will always be up-to-date. If conflicts occur during the rebase, a workspace
+                This means that every workspace will always be up-to-date. If conflicts occur during the rebase, a
+                workspace
                 will need manual merging.
             </p>
             <h3>Limitations</h3>

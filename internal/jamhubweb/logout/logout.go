@@ -6,32 +6,35 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zdgeier/jamhub/internal/jamenv"
 )
 
 func Handler(ctx *gin.Context) {
-	logoutUrl, err := url.Parse("https://" + os.Getenv("AUTH0_DOMAIN") + "/v2/logout")
-	if err != nil {
-		ctx.String(http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	scheme := "http"
-	if ctx.Request.TLS != nil {
-		scheme = "https"
-	}
-
-	returnTo, err := url.Parse(scheme + "://" + ctx.Request.Host)
-	if err != nil {
-		ctx.String(http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	parameters := url.Values{}
-	parameters.Add("returnTo", returnTo.String())
-	parameters.Add("client_id", os.Getenv("AUTH0_CLIENT_ID"))
-	logoutUrl.RawQuery = parameters.Encode()
-
 	ctx.SetCookie("auth-session", "", 0, "/", "", true, false)
+	if jamenv.Env() == jamenv.Prod {
+		logoutUrl, err := url.Parse("https://" + os.Getenv("AUTH0_DOMAIN") + "/v2/logout")
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
 
-	ctx.Redirect(http.StatusTemporaryRedirect, logoutUrl.String())
+		scheme := "http"
+		if ctx.Request.TLS != nil {
+			scheme = "https"
+		}
+
+		returnTo, err := url.Parse(scheme + "://" + ctx.Request.Host)
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		parameters := url.Values{}
+		parameters.Add("returnTo", returnTo.String())
+		parameters.Add("client_id", os.Getenv("AUTH0_CLIENT_ID"))
+		logoutUrl.RawQuery = parameters.Encode()
+		ctx.Redirect(http.StatusTemporaryRedirect, logoutUrl.String())
+	} else {
+		ctx.Redirect(http.StatusTemporaryRedirect, "/")
+	}
 }

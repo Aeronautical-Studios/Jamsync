@@ -45,29 +45,16 @@ func (a *App) startup(ctx context.Context) {
 	a.client = apiClient
 }
 
-// func (a *App) ListProjects() []string {
-// 	resp, err := a.client.ListUserProjects(a.ctx, &pb.ListUserProjectsRequest{})
-// 	if err != nil {
-// 		log.Panic(err)
-// 	}
-//
-// 	var projects []string
-// 	for _, proj := range resp.GetProjects() {
-// 		projects = append(projects, proj.Name)
-// 	}
-// 	return projects
-// }
-
-func (a *App) Checkout(workspaceName string) string {
+func (a *App) WorkOn(workspaceName string) string {
 	state, err := statefile.Find()
 	if err != nil {
-		panic("Could not find a `.jamhub` file. Run `jam init` to initialize the project.")
+		panic("Could not find a `.jam` file. Run `jam init` to initialize the project.")
 	}
 
 	if state.CommitInfo == nil || state.WorkspaceInfo != nil {
 		if workspaceName == "main" || workspaceName == "mainline" {
 			fileMetadata := jam.ReadLocalFileList()
-			localToRemoteDiff, err := jam.DiffLocalToRemoteWorkspace(a.client, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+			localToRemoteDiff, err := jam.DiffLocalToRemoteWorkspace(a.client, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -82,18 +69,19 @@ func (a *App) Checkout(workspaceName string) string {
 				log.Panic(err)
 			}
 
-			diffRemoteToLocalResp, err := jam.DiffRemoteToLocalCommit(a.client, state.ProjectId, commitResp.CommitId, &pb.FileMetadata{})
+			diffRemoteToLocalResp, err := jam.DiffRemoteToLocalCommit(a.client, state.OwnerUsername, state.ProjectId, commitResp.CommitId, &pb.FileMetadata{})
 			if err != nil {
 				log.Panic(err)
 			}
 
-			err = jam.ApplyFileListDiffCommit(a.client, state.ProjectId, commitResp.CommitId, diffRemoteToLocalResp)
+			err = jam.ApplyFileListDiffCommit(a.client, state.OwnerUsername, state.ProjectId, commitResp.CommitId, diffRemoteToLocalResp)
 			if err != nil {
 				log.Panic(err)
 			}
 
 			err = statefile.StateFile{
-				ProjectId: state.ProjectId,
+				OwnerUsername: state.OwnerUsername,
+				ProjectId:     state.ProjectId,
 				CommitInfo: &statefile.CommitInfo{
 					CommitId: commitResp.CommitId,
 				},
@@ -102,7 +90,7 @@ func (a *App) Checkout(workspaceName string) string {
 				panic(err)
 			}
 		} else {
-			return "Must be on mainline to checkout."
+			return "Must be on mainline to workon."
 		}
 	}
 
@@ -128,13 +116,13 @@ func (a *App) Checkout(workspaceName string) string {
 
 		// if workspace already exists, do a pull
 		fileMetadata := jam.ReadLocalFileList()
-		remoteToLocalDiff, err := jam.DiffRemoteToLocalWorkspace(a.client, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.ChangeId, fileMetadata)
+		remoteToLocalDiff, err := jam.DiffRemoteToLocalWorkspace(a.client, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.ChangeId, fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}
 
 		if jam.DiffHasChanges(remoteToLocalDiff) {
-			err = jam.ApplyFileListDiffWorkspace(a.client, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.ChangeId, remoteToLocalDiff)
+			err = jam.ApplyFileListDiffWorkspace(a.client, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.ChangeId, remoteToLocalDiff)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -148,7 +136,8 @@ func (a *App) Checkout(workspaceName string) string {
 		}
 
 		err = statefile.StateFile{
-			ProjectId: state.ProjectId,
+			OwnerUsername: state.OwnerUsername,
+			ProjectId:     state.ProjectId,
 			WorkspaceInfo: &statefile.WorkspaceInfo{
 				WorkspaceId: state.WorkspaceInfo.WorkspaceId,
 				ChangeId:    changeResp.ChangeId,
@@ -167,7 +156,8 @@ func (a *App) Checkout(workspaceName string) string {
 	}
 
 	err = statefile.StateFile{
-		ProjectId: state.ProjectId,
+		OwnerUsername: state.OwnerUsername,
+		ProjectId:     state.ProjectId,
 		WorkspaceInfo: &statefile.WorkspaceInfo{
 			WorkspaceId: createResp.WorkspaceId,
 		},
@@ -192,20 +182,20 @@ func (a *App) ProjectExists(projectName string) bool {
 	return false
 }
 
-func (a *App) InitNewProject(path string, projectName string) {
+func (a *App) InitNewProject(path string, ownerId string, projectName string) {
 	err := os.Chdir(path)
 	if err != nil {
 		panic(err)
 	}
-	jam.InitNewProject(a.client, projectName)
+	jam.InitNewProject(a.client, ownerId, projectName)
 }
 
-func (a *App) InitExistingProject(path string, projectName string) {
+func (a *App) InitExistingProject(path string, ownerId string, projectName string) {
 	err := os.Chdir(path)
 	if err != nil {
 		panic(err)
 	}
-	jam.InitExistingProject(a.client, projectName)
+	jam.InitExistingProject(a.client, ownerId, projectName)
 }
 
 func (a *App) ChangeDirectory(path string) {
@@ -234,7 +224,7 @@ func (a *App) GetInfo() []string {
 
 	state, err := statefile.Find()
 	if err != nil {
-		panic("no .jamhub!")
+		panic("no .jam!")
 	}
 	nameResp, err := a.client.GetProjectName(context.Background(), &pb.GetProjectNameRequest{
 		ProjectId: state.ProjectId,
@@ -269,7 +259,7 @@ func (a *App) GetInfo() []string {
 
 		if changeResp.ChangeId == state.WorkspaceInfo.ChangeId {
 			fileMetadata := jam.ReadLocalFileList()
-			localToRemoteDiff, err := jam.DiffLocalToRemoteWorkspace(a.client, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+			localToRemoteDiff, err := jam.DiffLocalToRemoteWorkspace(a.client, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -286,7 +276,7 @@ func (a *App) GetInfo() []string {
 			}
 		} else if changeResp.ChangeId > state.WorkspaceInfo.ChangeId {
 			fileMetadata := jam.ReadLocalFileList()
-			remoteToLocalDiff, err := jam.DiffRemoteToLocalWorkspace(a.client, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+			remoteToLocalDiff, err := jam.DiffRemoteToLocalWorkspace(a.client, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}

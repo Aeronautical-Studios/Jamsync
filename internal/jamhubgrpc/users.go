@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/zdgeier/jamhub/gen/pb"
-	"github.com/zdgeier/jamhub/internal/jamenv"
 	"github.com/zdgeier/jamhub/internal/jamhubgrpc/serverauth"
 )
 
@@ -25,9 +24,6 @@ func (s JamHub) Ping(ctx context.Context, in *pb.PingRequest) (*pb.PingResponse,
 	id, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
-	}
-	if jamenv.Env() == jamenv.Local {
-		return &pb.PingResponse{Username: id}, nil
 	}
 
 	username, err := s.db.Username(id)

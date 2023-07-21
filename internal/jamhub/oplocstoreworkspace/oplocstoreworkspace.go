@@ -50,11 +50,11 @@ func (s *LocalOpLocStore) InsertOperationLocations(opLocs *pb.WorkspaceOperation
 		currFile *os.File
 		err      error
 	)
-	err = os.MkdirAll(s.fileDir(opLocs.GetOwnerId(), opLocs.GetProjectId(), opLocs.GetWorkspaceId(), opLocs.GetChangeId(), opLocs.GetPathHash()), os.ModePerm)
+	err = os.MkdirAll(s.fileDir(opLocs.GetOwnerUsername(), opLocs.GetProjectId(), opLocs.GetWorkspaceId(), opLocs.GetChangeId(), opLocs.GetPathHash()), os.ModePerm)
 	if err != nil {
 		return err
 	}
-	filePath := s.filePath(opLocs.GetOwnerId(), opLocs.GetProjectId(), opLocs.GetWorkspaceId(), opLocs.GetChangeId(), opLocs.GetPathHash())
+	filePath := s.filePath(opLocs.GetOwnerUsername(), opLocs.GetProjectId(), opLocs.GetWorkspaceId(), opLocs.GetChangeId(), opLocs.GetPathHash())
 	if s.cache.Contains(filePath) {
 		currFile, _ = s.cache.Get(filePath)
 	} else {
@@ -87,22 +87,37 @@ func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId, work
 	} else {
 		currFile, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		s.cache.Add(filePath, currFile)
 	}
 
 	s.mu.Lock()
 	buf := bytes.NewBuffer(nil)
-	currFile.Seek(0, 0)
+	_, err = currFile.Seek(0, 0)
+	if err != nil {
+		fmt.Println("got", err)
+		currFile, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+		if err != nil {
+			panic(err)
+		}
+		s.cache.Add(filePath, currFile)
+		_, err = currFile.Seek(0, 0)
+		if err != nil {
+			panic(err)
+		}
+	}
 	_, err = io.Copy(buf, currFile)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	s.mu.Unlock()
 
 	opLocs = &pb.WorkspaceOperationLocations{}
 	err = proto.Unmarshal(buf.Bytes(), opLocs)
+	if err != nil {
+		panic(err)
+	}
 	return opLocs, err
 }
 

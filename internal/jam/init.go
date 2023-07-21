@@ -27,41 +27,44 @@ func InitNewProject(apiClient pb.JamHubClient, projectName string) {
 	}
 	fmt.Println("Initializing a project at " + currentPath + ". Uploading files...")
 
-	workspaceResp, err := apiClient.CreateWorkspace(context.TODO(), &pb.CreateWorkspaceRequest{ProjectId: resp.ProjectId, WorkspaceName: "init"})
+	workspaceResp, err := apiClient.CreateWorkspace(context.TODO(), &pb.CreateWorkspaceRequest{OwnerUsername: resp.GetOwnerUsername(), ProjectId: resp.ProjectId, WorkspaceName: "init"})
 	if err != nil {
 		log.Panic(err)
 	}
 
 	fileMetadata := ReadLocalFileList()
-	fileMetadataDiff, err := diffLocalToRemoteCommit(apiClient, resp.GetProjectId(), workspaceResp.GetWorkspaceId(), fileMetadata)
+	fileMetadataDiff, err := diffLocalToRemoteCommit(apiClient, resp.GetOwnerUsername(), resp.GetProjectId(), workspaceResp.GetWorkspaceId(), fileMetadata)
 	if err != nil {
 		panic(err)
 	}
 
-	err = pushFileListDiffWorkspace(apiClient, resp.ProjectId, workspaceResp.WorkspaceId, 0, fileMetadata, fileMetadataDiff)
+	err = pushFileListDiffWorkspace(apiClient, resp.GetOwnerUsername(), resp.GetProjectId(), workspaceResp.WorkspaceId, 0, fileMetadata, fileMetadataDiff)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println("Merging...")
 	mergeResp, err := apiClient.MergeWorkspace(context.Background(), &pb.MergeWorkspaceRequest{
-		ProjectId:   resp.ProjectId,
-		WorkspaceId: workspaceResp.WorkspaceId,
+		ProjectId:     resp.GetProjectId(),
+		OwnerUsername: resp.GetOwnerUsername(),
+		WorkspaceId:   workspaceResp.WorkspaceId,
 	})
 	if err != nil {
 		panic(err)
 	}
 
 	_, err = apiClient.DeleteWorkspace(context.Background(), &pb.DeleteWorkspaceRequest{
-		ProjectId:   resp.ProjectId,
-		WorkspaceId: workspaceResp.WorkspaceId,
+		OwnerUsername: resp.GetOwnerUsername(),
+		ProjectId:     resp.GetProjectId(),
+		WorkspaceId:   workspaceResp.WorkspaceId,
 	})
 	if err != nil {
 		log.Panic(err)
 	}
 
 	err = statefile.StateFile{
-		ProjectId: resp.ProjectId,
+		OwnerUsername: resp.OwnerUsername,
+		ProjectId:     resp.ProjectId,
 		CommitInfo: &statefile.CommitInfo{
 			CommitId: mergeResp.CommitId,
 		},
@@ -69,36 +72,39 @@ func InitNewProject(apiClient pb.JamHubClient, projectName string) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Done! Run `jam checkout <workspace name>` to start making changes.")
+	fmt.Println("Done! Run `jam workon <workspace name>` to start making changes.")
 }
 
-func InitExistingProject(apiClient pb.JamHubClient, projectName string) {
+func InitExistingProject(apiClient pb.JamHubClient, ownerUsername string, projectName string) {
 	resp, err := apiClient.GetProjectId(context.Background(), &pb.GetProjectIdRequest{
-		ProjectName: projectName,
+		OwnerUsername: ownerUsername,
+		ProjectName:   projectName,
 	})
 	if err != nil {
 		log.Panic(err)
 	}
 
 	commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &pb.GetProjectCurrentCommitRequest{
-		ProjectId: resp.GetProjectId(),
+		OwnerUsername: ownerUsername,
+		ProjectId:     resp.GetProjectId(),
 	})
 	if err != nil {
 		log.Panic(err)
 	}
 
-	diffRemoteToLocalResp, err := DiffRemoteToLocalCommit(apiClient, resp.ProjectId, commitResp.CommitId, &pb.FileMetadata{})
+	diffRemoteToLocalResp, err := DiffRemoteToLocalCommit(apiClient, ownerUsername, resp.ProjectId, commitResp.CommitId, &pb.FileMetadata{})
 	if err != nil {
 		log.Panic(err)
 	}
 
-	err = ApplyFileListDiffCommit(apiClient, resp.GetProjectId(), commitResp.CommitId, diffRemoteToLocalResp)
+	err = ApplyFileListDiffCommit(apiClient, ownerUsername, resp.GetProjectId(), commitResp.CommitId, diffRemoteToLocalResp)
 	if err != nil {
 		log.Panic(err)
 	}
 
 	err = statefile.StateFile{
-		ProjectId: resp.ProjectId,
+		OwnerUsername: ownerUsername,
+		ProjectId:     resp.ProjectId,
 		CommitInfo: &statefile.CommitInfo{
 			CommitId: commitResp.CommitId,
 		},
@@ -111,7 +117,7 @@ func InitExistingProject(apiClient pb.JamHubClient, projectName string) {
 func InitConfig() {
 	_, err := statefile.Find()
 	if err == nil {
-		fmt.Println("There's already a project initialized file here. Remove the `.jamhub` file to reinitialize.")
+		fmt.Println("There's already a project initialized file here. Remove the `.jam` file to reinitialize.")
 		os.Exit(1)
 	}
 
@@ -140,10 +146,11 @@ func InitConfig() {
 			InitNewProject(apiClient, projectName)
 			break
 		} else if strings.ToLower(flag) == "n" {
-			fmt.Print("Name of project to download: ")
-			var projectName string
-			fmt.Scan(&projectName)
-			InitExistingProject(apiClient, projectName)
+			fmt.Print("Project Name (`<owner>/<project name>`): ")
+			var ownerProjectName string
+			fmt.Scan(&ownerProjectName)
+			s := strings.Split(ownerProjectName, "/")
+			InitExistingProject(apiClient, s[0], s[1])
 			break
 		}
 	}

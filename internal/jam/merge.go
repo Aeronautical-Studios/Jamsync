@@ -16,7 +16,7 @@ import (
 func Merge() {
 	state, err := statefile.Find()
 	if err != nil {
-		fmt.Println("Could not find a `.jamhub` file. Run `jam init` to initialize the project.")
+		fmt.Println("Could not find a `.jam` file. Run `jam init` to initialize the project.")
 		return
 	}
 
@@ -34,12 +34,12 @@ func Merge() {
 	defer closer()
 
 	if state.CommitInfo != nil {
-		fmt.Println("Currently on a commit, checkout a workspace with `jam checkout <workspacename>` to push changes.")
+		fmt.Println("Currently on a commit, workon a workspace with `jam workon <workspacename>` to push changes.")
 		os.Exit(1)
 	}
 
 	fileMetadata := ReadLocalFileList()
-	remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+	remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -50,23 +50,26 @@ func Merge() {
 	}
 
 	resp, err := apiClient.MergeWorkspace(context.Background(), &pb.MergeWorkspaceRequest{
-		ProjectId:   state.ProjectId,
-		WorkspaceId: state.WorkspaceInfo.WorkspaceId,
+		OwnerUsername: state.OwnerUsername,
+		ProjectId:     state.ProjectId,
+		WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
 	})
 	if err != nil {
 		log.Panic(err)
 	}
 
 	_, err = apiClient.DeleteWorkspace(context.Background(), &pb.DeleteWorkspaceRequest{
-		ProjectId:   state.ProjectId,
-		WorkspaceId: state.WorkspaceInfo.WorkspaceId,
+		OwnerUsername: state.OwnerUsername,
+		ProjectId:     state.ProjectId,
+		WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
 	})
 	if err != nil {
 		log.Panic(err)
 	}
 
 	err = statefile.StateFile{
-		ProjectId: state.ProjectId,
+		OwnerUsername: state.OwnerUsername,
+		ProjectId:     state.ProjectId,
 		CommitInfo: &statefile.CommitInfo{
 			CommitId: resp.CommitId,
 		},

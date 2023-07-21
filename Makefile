@@ -11,7 +11,7 @@ server:
 # Build ================================
 
 clean:
-	rm -rf jamhub-build && rm -rf .jamhub && rm -rf jamhub-build.zip && rm -rf jamhubdata/
+	rm -rf jamhub-build && rm -rf .jam && rm -rf jamhub-build.zip && rm -rf jamhubdata/
 
 zipself:
 	git archive --format=zip --output jamhub-source.zip HEAD && mkdir -p ./jamhub-build/ && mv jamhub-source.zip ./jamhub-build/
@@ -25,16 +25,19 @@ buildeditor:
 movewebassets:
 	cp -R cmd/jamhubweb/public jamhub-build/; cp -R cmd/jamhubweb/template jamhub-build/;
 
-buildui:
-	./scripts/buildui.sh
+# Removed for now since UI is on hold
+# buildui:
+# 	./scripts/buildui.sh
 
 # Needed to be done locally since Mac requires signing binaries. Make sure you have signing env variables setup to do this.
 buildclients:
 	./scripts/buildclients.sh
 
-# Run on server since ARM has some weirdness with cgo
-buildservers:
-	go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1" -o jamhubgrpc cmd/jamhubgrpc/main.go && go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1"  -o jamhubweb cmd/jamhubweb/main.go
+buildweb:
+	go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1"  -o jamhubweb cmd/jamhubweb/main.go
+
+buildgrpc:
+	go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1" -o jamhubgrpc cmd/jamhubgrpc/main.go
 
 zipbuild:
 	zip -r jamhub-build.zip jamhub-build/
@@ -43,22 +46,37 @@ zipbuild:
 uploadbuild:
 	scp -i ~/jamsync-prod-us-west-1.pem ./jamhub-build.zip ec2-user@ssh.prod.jamsync.dev:~/jamhub-build.zip
 
+uploadbuildwebeast:
+	scp -i ~/jamsynckeypair.pem ./jamhub-build.zip ec2-user@jamhubweb-prod-us-east-2:~/jamhub-build.zip
+
+uploadbuildgrpceast:
+	scp -i ~/jamsynckeypair.pem ./jamhub-build.zip ec2-user@jamhubgrpc-prod-us-east-2:~/jamhub-build.zip
+
 # Needed since make doesn't build same target twice and I didn't bother to find a better way
 cleanbuild:
 	rm -rf jamhub-build && rm -rf jamhub-build.zip
 
 # Deploy ===============================
 
-# Make sure to setup hosts file to resolve ssh.prod.jamhub.dev to proper backend server.
-deploy:
-	./scripts/deploy.sh
+deploywebscript:
+	./scripts/deployweb.sh
 
-build: clean zipself protos buildeditor movewebassets buildclients buildui zipbuild uploadbuild deploy cleanbuild installclientremote
+deployweb: clean zipself protos buildeditor movewebassets zipbuild uploadbuildwebeast deploywebscript
+
+deploygrpcscript:
+	./scripts/deploygrpc.sh
+
+deploygrpc: clean zipself protos zipbuild uploadbuildgrpceast deploygrpcscript
+
+deployclientsscript:
+	./scripts/deployclients.sh
+
+deployclients: clean protos buildclients zipbuild uploadbuildwebeast deployclientsscript installclientremote
 
 # Misc ================================
 
 install:
-	go mod tidy && cd cmd/web/editor/ && npm install
+	go mod tidy && cd cmd/jamhubweb/editor/ && npm install
 
 installclient:
 	go build -ldflags "-X main.built=`date -u  +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1" -o jam cmd/jamcli/main.go && mv jam ~/bin/jam
@@ -71,3 +89,9 @@ grpcui:
 
 ssh:
 	ssh -i ~/jamsync-prod-us-west-1.pem ec2-user@ssh.prod.jamsync.dev
+
+ssheastweb:
+	ssh -i ~/jamsynckeypair.pem ec2-user@jamhubweb-prod-us-east-2
+
+ssheastgrpc:
+	ssh -i ~/jamsynckeypair.pem ec2-user@jamhubgrpc-prod-us-east-2

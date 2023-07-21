@@ -48,6 +48,7 @@ func TestClient_UploadDownloadWorkspaceFile(t *testing.T) {
 	require.NoError(t, err)
 	defer closer()
 
+	ownerUsername := "testOwner"
 	projectName := "UploadDownloadWorkspaceFile"
 
 	addProjectResp, err := apiClient.AddProject(context.Background(), &pb.AddProjectRequest{
@@ -55,7 +56,7 @@ func TestClient_UploadDownloadWorkspaceFile(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := apiClient.CreateWorkspace(ctx, &pb.CreateWorkspaceRequest{ProjectId: addProjectResp.ProjectId, WorkspaceName: os.Args[2]})
+	resp, err := apiClient.CreateWorkspace(ctx, &pb.CreateWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceName: os.Args[2]})
 	if err != nil {
 		log.Panic(err)
 	}
@@ -105,11 +106,11 @@ func TestClient_UploadDownloadWorkspaceFile(t *testing.T) {
 	var changeId uint64
 	for _, fileOperation := range fileOperations {
 		t.Run(fileOperation.name, func(t *testing.T) {
-			err = uploadWorkspaceFile(apiClient, addProjectResp.ProjectId, resp.WorkspaceId, changeId, fileOperation.filePath, bytes.NewReader(fileOperation.data))
+			err = uploadWorkspaceFile(apiClient, ownerUsername, addProjectResp.ProjectId, resp.WorkspaceId, changeId, fileOperation.filePath, bytes.NewReader(fileOperation.data))
 			require.NoError(t, err)
 
 			result := new(bytes.Buffer)
-			err = file.DownloadWorkspaceFile(apiClient, addProjectResp.ProjectId, resp.WorkspaceId, changeId, fileOperation.filePath, bytes.NewReader(fileOperation.data), result)
+			err = file.DownloadWorkspaceFile(apiClient, ownerUsername, addProjectResp.ProjectId, resp.WorkspaceId, changeId, fileOperation.filePath, bytes.NewReader(fileOperation.data), result)
 
 			require.NoError(t, err)
 			require.Equal(t, fileOperation.data, result.Bytes())
@@ -125,6 +126,7 @@ func TestClient_UploadDownloadMergedFile(t *testing.T) {
 	require.NoError(t, err)
 	defer closer()
 
+	ownerUsername := "testOwner"
 	projectName := "UploadDownloadMergedFile"
 
 	addProjectResp, err := apiClient.AddProject(context.Background(), &pb.AddProjectRequest{
@@ -192,27 +194,27 @@ func TestClient_UploadDownloadMergedFile(t *testing.T) {
 
 	for _, fileOperation := range fileOperations {
 		t.Run(fileOperation.name, func(t *testing.T) {
-			resp, err := apiClient.CreateWorkspace(ctx, &pb.CreateWorkspaceRequest{ProjectId: addProjectResp.ProjectId, WorkspaceName: fileOperation.workspaceName})
+			resp, err := apiClient.CreateWorkspace(ctx, &pb.CreateWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceName: fileOperation.workspaceName})
 			if err != nil {
 				log.Panic(err)
 			}
 
-			err = uploadWorkspaceFile(apiClient, addProjectResp.ProjectId, resp.WorkspaceId, fileOperation.changeId, fileOperation.filePath, bytes.NewReader(fileOperation.data))
+			err = uploadWorkspaceFile(apiClient, ownerUsername, addProjectResp.ProjectId, resp.WorkspaceId, fileOperation.changeId, fileOperation.filePath, bytes.NewReader(fileOperation.data))
 			require.NoError(t, err)
 
 			result := new(bytes.Buffer)
-			err = file.DownloadWorkspaceFile(apiClient, addProjectResp.ProjectId, resp.WorkspaceId, fileOperation.changeId, fileOperation.filePath, bytes.NewReader(fileOperation.data), result)
+			err = file.DownloadWorkspaceFile(apiClient, ownerUsername, addProjectResp.ProjectId, resp.WorkspaceId, fileOperation.changeId, fileOperation.filePath, bytes.NewReader(fileOperation.data), result)
 
 			require.NoError(t, err)
 			require.Equal(t, fileOperation.data, result.Bytes())
 
-			mergeResp, err := apiClient.MergeWorkspace(ctx, &pb.MergeWorkspaceRequest{ProjectId: addProjectResp.ProjectId, WorkspaceId: resp.WorkspaceId})
+			mergeResp, err := apiClient.MergeWorkspace(ctx, &pb.MergeWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceId: resp.WorkspaceId})
 			if err != nil {
 				log.Panic(err)
 			}
 
 			mergeResult := new(bytes.Buffer)
-			err = file.DownloadCommittedFile(apiClient, addProjectResp.ProjectId, mergeResp.CommitId, fileOperation.filePath, bytes.NewReader(fileOperation.data), mergeResult)
+			err = file.DownloadCommittedFile(apiClient, ownerUsername, addProjectResp.ProjectId, mergeResp.CommitId, fileOperation.filePath, bytes.NewReader(fileOperation.data), mergeResult)
 
 			require.NoError(t, err)
 			require.Equal(t, fileOperation.data, mergeResult.Bytes())

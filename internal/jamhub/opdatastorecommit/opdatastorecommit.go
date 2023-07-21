@@ -32,16 +32,16 @@ func NewOpDataStoreCommit() *LocalStore {
 	}
 }
 
-func (s *LocalStore) filePath(ownerId string, projectId uint64, pathHash []byte) string {
-	return fmt.Sprintf("jamhubdata/%s/%d/opdatacommit/%02X/%02X.locs", ownerId, projectId, pathHash[:1], pathHash)
+func (s *LocalStore) filePath(ownerUsername string, projectId uint64, pathHash []byte) string {
+	return fmt.Sprintf("jamhubdata/%s/%d/opdatacommit/%02X/%02X.locs", ownerUsername, projectId, pathHash[:1], pathHash)
 }
 
-func (s *LocalStore) fileDir(ownerId string, projectId uint64, pathHash []byte) string {
-	return fmt.Sprintf("jamhubdata/%s/%d/opdatacommit/%02X", ownerId, projectId, pathHash[:1])
+func (s *LocalStore) fileDir(ownerUsername string, projectId uint64, pathHash []byte) string {
+	return fmt.Sprintf("jamhubdata/%s/%d/opdatacommit/%02X", ownerUsername, projectId, pathHash[:1])
 }
 
-func (s *LocalStore) Read(ownerId string, projectId uint64, pathHash []byte, offset uint64, length uint64) (*pb.Operation, error) {
-	filePath := s.filePath(ownerId, projectId, pathHash)
+func (s *LocalStore) Read(ownerUsername string, projectId uint64, pathHash []byte, offset uint64, length uint64) (*pb.Operation, error) {
+	filePath := s.filePath(ownerUsername, projectId, pathHash)
 	var (
 		currFile *os.File
 		err      error
@@ -71,12 +71,12 @@ func (s *LocalStore) Read(ownerId string, projectId uint64, pathHash []byte, off
 	return op, nil
 }
 
-func (s *LocalStore) Write(ownerId string, projectId uint64, pathHash []byte, op *pb.Operation) (offset uint64, length uint64, err error) {
-	err = os.MkdirAll(s.fileDir(ownerId, projectId, pathHash), os.ModePerm)
+func (s *LocalStore) Write(ownerUsername string, projectId uint64, pathHash []byte, op *pb.Operation) (offset uint64, length uint64, err error) {
+	err = os.MkdirAll(s.fileDir(ownerUsername, projectId, pathHash), os.ModePerm)
 	if err != nil {
 		return 0, 0, err
 	}
-	filePath := s.filePath(ownerId, projectId, pathHash)
+	filePath := s.filePath(ownerUsername, projectId, pathHash)
 	var currFile *os.File
 	if s.cache.Contains(filePath) {
 		currFile, _ = s.cache.Get(filePath)

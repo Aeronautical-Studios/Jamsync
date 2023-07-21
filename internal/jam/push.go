@@ -20,7 +20,7 @@ func Push() {
 
 	stateFile, err := statefile.Find()
 	if err != nil {
-		fmt.Println("Could not find a `.jamhub` file. Run `jam init` to initialize the project.")
+		fmt.Println("Could not find a `.jam` file. Run `jam init` to initialize the project.")
 		os.Exit(1)
 	}
 
@@ -33,19 +33,19 @@ func Push() {
 	defer closer()
 
 	if stateFile.CommitInfo != nil {
-		fmt.Println("Currently on a commit, checkout a workspace with `jam checkout <workspacename>` to push changes.")
+		fmt.Println("Currently on a commit, workon a workspace with `jam workon <workspacename>` to push changes.")
 		os.Exit(1)
 	}
 
 	fileMetadata := ReadLocalFileList()
-	localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, stateFile.WorkspaceInfo.ChangeId, fileMetadata)
+	localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, stateFile.OwnerUsername, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, stateFile.WorkspaceInfo.ChangeId, fileMetadata)
 	if err != nil {
 		log.Panic(err)
 	}
 
 	changeId := stateFile.WorkspaceInfo.ChangeId + 1
 	if DiffHasChanges(localToRemoteDiff) {
-		err = pushFileListDiffWorkspace(apiClient, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, changeId, fileMetadata, localToRemoteDiff)
+		err = pushFileListDiffWorkspace(apiClient, stateFile.OwnerUsername, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, changeId, fileMetadata, localToRemoteDiff)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -59,7 +59,8 @@ func Push() {
 	}
 
 	err = statefile.StateFile{
-		ProjectId: stateFile.ProjectId,
+		OwnerUsername: stateFile.OwnerUsername,
+		ProjectId:     stateFile.ProjectId,
 		WorkspaceInfo: &statefile.WorkspaceInfo{
 			WorkspaceId: stateFile.WorkspaceInfo.WorkspaceId,
 			ChangeId:    changeId,

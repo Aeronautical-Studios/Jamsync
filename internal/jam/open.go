@@ -16,7 +16,7 @@ import (
 func Open() {
 	state, err := statefile.Find()
 	if err != nil {
-		fmt.Println("Could not find a `.jamhub` file. Run `jam init` to initialize the project.")
+		fmt.Println("Could not find a `.jam` file. Run `jam init` to initialize the project.")
 		return
 	}
 
@@ -34,7 +34,8 @@ func Open() {
 	defer closer()
 
 	nameResp, err := apiClient.GetProjectName(context.Background(), &pb.GetProjectNameRequest{
-		ProjectId: state.ProjectId,
+		OwnerUsername: state.OwnerUsername,
+		ProjectId:     state.ProjectId,
 	})
 	if err != nil {
 		panic(err)
@@ -43,8 +44,8 @@ func Open() {
 	url := "https://jamhub.dev/"
 	username := authFile.Username
 	if jamenv.Env() == jamenv.Local {
-		url = "http://localhost:8081/"
-		username = "test@jamhub.dev"
+		url = "http://localhost/"
+		username = authFile.Username
 	}
 
 	err = browser.OpenURL(url + username + "/" + nameResp.ProjectName + "/committedfiles/")

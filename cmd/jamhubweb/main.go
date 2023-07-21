@@ -25,9 +25,9 @@ func main() {
 
 	rtr := jamhubweb.New(auth)
 
-	log.Print("Server listening on http://0.0.0.0:8081/")
+	log.Print("Server listening on http://0.0.0.0:80/")
 
-	if err := http.ListenAndServe("0.0.0.0:8081", rtr); err != nil {
+	if err := http.ListenAndServe("0.0.0.0:80", rtr); err != nil {
 		log.Panicf("There was an error with the http server: %v", err)
 	}
 }

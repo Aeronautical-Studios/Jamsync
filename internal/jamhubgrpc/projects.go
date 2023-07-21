@@ -2,18 +2,33 @@ package jamhubgrpc
 
 import (
 	"context"
+	"errors"
 
 	"github.com/zdgeier/jamhub/gen/pb"
 	"github.com/zdgeier/jamhub/internal/jamhubgrpc/serverauth"
 )
 
 func (s JamHub) GetProjectName(ctx context.Context, in *pb.GetProjectNameRequest) (*pb.GetProjectNameResponse, error) {
-	id, err := serverauth.ParseIdFromCtx(ctx)
+	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	projectName, err := s.db.GetProjectName(in.GetProjectId(), id)
+	currentUsername, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), currentUsername)
+	if err != nil {
+		return nil, err
+	}
+
+	if !accessible {
+		return nil, errors.New("not an owner or collaborator of this project")
+	}
+
+	projectName, err := s.db.GetProjectName(in.GetProjectId(), currentUsername)
 	if err != nil {
 		return nil, err
 	}
@@ -29,14 +44,86 @@ func (s JamHub) AddProject(ctx context.Context, in *pb.AddProjectRequest) (*pb.A
 		return nil, err
 	}
 
-	projectId, err := s.db.AddProject(in.GetProjectName(), id)
+	username, err := s.db.GetUsername(id)
+	if err != nil {
+		return nil, err
+	}
+
+	projectId, err := s.db.AddProject(in.GetProjectName(), username)
 	if err != nil {
 		return nil, err
 	}
 
 	return &pb.AddProjectResponse{
-		ProjectId: projectId,
+		ProjectId:     projectId,
+		OwnerUsername: username,
 	}, nil
+}
+
+func (s JamHub) GetCollaborators(ctx context.Context, in *pb.GetCollaboratorsRequest) (*pb.GetCollaboratorsResponse, error) {
+	userId, err := serverauth.ParseIdFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if in.GetOwnerUsername() == "" {
+		return nil, errors.New("must provide owner username")
+	}
+
+	currentUsername, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), currentUsername)
+	if err != nil {
+		return nil, err
+	}
+
+	if !accessible {
+		return nil, errors.New("not an owner or collaborator of this project")
+	}
+
+	usernames, err := s.db.ListCollaborators(in.GetProjectId())
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GetCollaboratorsResponse{
+		Usernames: usernames,
+	}, nil
+}
+
+func (s JamHub) AddCollaborator(ctx context.Context, in *pb.AddCollaboratorRequest) (*pb.AddCollaboratorResponse, error) {
+	userId, err := serverauth.ParseIdFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if in.GetOwnerUsername() == "" {
+		return nil, errors.New("must provide owner id")
+	}
+
+	currentUsername, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), currentUsername)
+	if err != nil {
+		return nil, err
+	}
+
+	if !accessible {
+		return nil, errors.New("not an owner or collaborator of this project")
+	}
+
+	err = s.db.AddCollaborator(in.GetProjectId(), in.GetUsername())
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.AddCollaboratorResponse{}, nil
 }
 
 func (s JamHub) ListUserProjects(ctx context.Context, in *pb.ListUserProjectsRequest) (*pb.ListUserProjectsResponse, error) {
@@ -45,17 +132,100 @@ func (s JamHub) ListUserProjects(ctx context.Context, in *pb.ListUserProjectsReq
 		return nil, err
 	}
 
-	projects, err := s.db.ListUserProjects(id)
+	username, err := s.db.GetUsername(id)
 	if err != nil {
 		return nil, err
 	}
 
-	projectsPb := make([]*pb.ListUserProjectsResponse_Project, len(projects))
-	for i := range projectsPb {
-		projectsPb[i] = &pb.ListUserProjectsResponse_Project{Name: projects[i].Name, Id: projects[i].Id}
+	projects, err := s.db.ListProjectsOwned(username)
+	if err != nil {
+		return nil, err
+	}
+
+	collabProjects, err := s.db.ListProjectsAsCollaborator(username)
+	if err != nil {
+		return nil, err
+	}
+
+	projectsPb := make([]*pb.ListUserProjectsResponse_Project, 0, len(projects)+len(collabProjects))
+	for _, p := range projects {
+		projectsPb = append(projectsPb, &pb.ListUserProjectsResponse_Project{OwnerUsername: p.OwnerUsername, Name: p.Name, Id: p.Id})
+	}
+	for _, p := range collabProjects {
+		projectsPb = append(projectsPb, &pb.ListUserProjectsResponse_Project{OwnerUsername: p.OwnerUsername, Name: p.Name, Id: p.Id})
 	}
 
 	return &pb.ListUserProjectsResponse{Projects: projectsPb}, nil
+}
+
+func (s JamHub) ProjectIdOwner(owner string, projectId uint64) (bool, error) {
+	projectOwner, err := s.db.GetProjectOwnerUsername(projectId)
+	if err != nil {
+		return false, err
+	}
+
+	if owner == projectOwner {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// func (s JamHub) ProjectOwner(ownerUsername string, projectName string) (bool, error) {
+// 	projectId, err := s.db.GetProjectId(projectName, ownerUsername)
+// 	if err != nil {
+// 		return false, err
+// 	}
+
+// 	projectOwnerUsername, err := s.db.GetProjectOwnerUsername(projectId)
+// 	if err != nil {
+// 		return false, err
+// 	}
+
+// 	if ownerUsername == projectOwnerUsername {
+// 		return true, nil
+// 	}
+
+// 	return false, nil
+// }
+
+func (s JamHub) ProjectIdAccessible(ownerUsername string, projectId uint64, currentUsername string) (bool, error) {
+	projectOwnerUsername, err := s.db.GetProjectOwnerUsername(projectId)
+	if err != nil {
+		return false, err
+	}
+
+	if ownerUsername == projectOwnerUsername && projectOwnerUsername == currentUsername {
+		return true, nil
+	}
+
+	if s.db.HasCollaborator(projectId, currentUsername) {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (s JamHub) ProjectAccessible(owner string, projectName string, currentUsername string) (bool, error) {
+	projectId, err := s.db.GetProjectId(projectName, owner)
+	if err != nil {
+		return false, err
+	}
+
+	projectOwner, err := s.db.GetProjectOwnerUsername(projectId)
+	if err != nil {
+		return false, err
+	}
+
+	if owner == projectOwner && owner == currentUsername {
+		return true, nil
+	}
+
+	if s.db.HasCollaborator(projectId, currentUsername) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (s JamHub) GetProjectId(ctx context.Context, in *pb.GetProjectIdRequest) (*pb.GetProjectIdResponse, error) {
@@ -64,7 +234,23 @@ func (s JamHub) GetProjectId(ctx context.Context, in *pb.GetProjectIdRequest) (*
 		return nil, err
 	}
 
-	projectId, err := s.db.GetProjectId(in.GetProjectName(), userId)
+	if in.GetOwnerUsername() == "" {
+		return nil, errors.New("must provide owner id")
+	}
+
+	currentUsername, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	canAccess, err := s.ProjectAccessible(in.GetOwnerUsername(), in.GetProjectName(), currentUsername)
+	if err != nil {
+		return nil, err
+	} else if !canAccess {
+		return nil, errors.New("cannot access project")
+	}
+
+	projectId, err := s.db.GetProjectId(in.GetProjectName(), in.GetOwnerUsername())
 	if err != nil {
 		return nil, err
 	}

@@ -16,12 +16,12 @@ func NewLocalChangeStore() LocalChangeStore {
 	}
 }
 
-func (s LocalChangeStore) getLocalProjectDB(ownerId string, projectId uint64) (*sql.DB, error) {
+func (s LocalChangeStore) getLocalProjectDB(ownerUsername string, projectId uint64) (*sql.DB, error) {
 	if db, ok := s.dbs[projectId]; ok {
 		return db, nil
 	}
 
-	dir := fmt.Sprintf("jamhubdata/%s/%d", ownerId, projectId)
+	dir := fmt.Sprintf("jamhubdata/%s/%d", ownerUsername, projectId)
 	err := os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
 		return nil, err
@@ -40,48 +40,48 @@ func (s LocalChangeStore) getLocalProjectDB(ownerId string, projectId uint64) (*
 	return localDB, nil
 }
 
-func (s LocalChangeStore) GetWorkspaceNameById(ownerId string, projectId uint64, workspaceId uint64) (string, error) {
-	db, err := s.getLocalProjectDB(ownerId, projectId)
+func (s LocalChangeStore) GetWorkspaceNameById(ownerUsername string, projectId uint64, workspaceId uint64) (string, error) {
+	db, err := s.getLocalProjectDB(ownerUsername, projectId)
 	if err != nil {
 		return "", err
 	}
 	return getWorkspaceNameById(db, workspaceId)
 }
 
-func (s LocalChangeStore) GetWorkspaceIdByName(ownerId string, projectId uint64, workspaceName string) (uint64, error) {
-	db, err := s.getLocalProjectDB(ownerId, projectId)
+func (s LocalChangeStore) GetWorkspaceIdByName(ownerUsername string, projectId uint64, workspaceName string) (uint64, error) {
+	db, err := s.getLocalProjectDB(ownerUsername, projectId)
 	if err != nil {
 		return 0, err
 	}
 	return getWorkspaceIdByName(db, workspaceName)
 }
 
-func (s LocalChangeStore) GetWorkspaceBaseCommitId(ownerId string, projectId uint64, workspaceId uint64) (uint64, error) {
-	db, err := s.getLocalProjectDB(ownerId, projectId)
+func (s LocalChangeStore) GetWorkspaceBaseCommitId(ownerUsername string, projectId uint64, workspaceId uint64) (uint64, error) {
+	db, err := s.getLocalProjectDB(ownerUsername, projectId)
 	if err != nil {
 		return 0, err
 	}
 	return getWorkspaceBaseCommitId(db, workspaceId)
 }
 
-func (s LocalChangeStore) DeleteWorkspace(ownerId string, projectId uint64, workspaceId uint64) error {
-	db, err := s.getLocalProjectDB(ownerId, projectId)
+func (s LocalChangeStore) DeleteWorkspace(ownerUsername string, projectId uint64, workspaceId uint64) error {
+	db, err := s.getLocalProjectDB(ownerUsername, projectId)
 	if err != nil {
 		return err
 	}
 	return deleteWorkspace(db, workspaceId)
 }
 
-func (s LocalChangeStore) AddWorkspace(ownerId string, projectId uint64, workspaceName string, commitId uint64) (uint64, error) {
-	db, err := s.getLocalProjectDB(ownerId, projectId)
+func (s LocalChangeStore) AddWorkspace(ownerUsername string, projectId uint64, workspaceName string, commitId uint64) (uint64, error) {
+	db, err := s.getLocalProjectDB(ownerUsername, projectId)
 	if err != nil {
 		return 0, err
 	}
 	return addWorkspace(db, workspaceName, commitId)
 }
 
-func (s LocalChangeStore) ListWorkspaces(ownerId string, projectId uint64) (map[string]uint64, error) {
-	db, err := s.getLocalProjectDB(ownerId, projectId)
+func (s LocalChangeStore) ListWorkspaces(ownerUsername string, projectId uint64) (map[string]uint64, error) {
+	db, err := s.getLocalProjectDB(ownerUsername, projectId)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +89,6 @@ func (s LocalChangeStore) ListWorkspaces(ownerId string, projectId uint64) (map[
 	return listWorkspaces(db)
 }
 
-func (s LocalChangeStore) DeleteProject(projectId uint64, ownerId string) error {
-	return os.RemoveAll(fmt.Sprintf("jamhubdata/%s/%d", ownerId, projectId))
+func (s LocalChangeStore) DeleteProject(projectId uint64, ownerUsername string) error {
+	return os.RemoveAll(fmt.Sprintf("jamhubdata/%s/%d", ownerUsername, projectId))
 }

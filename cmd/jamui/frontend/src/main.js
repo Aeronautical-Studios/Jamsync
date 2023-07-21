@@ -1,7 +1,7 @@
 import './style.css';
 
 import logo from './assets/images/favicon.svg';
-import { ChangeDirectory, SelectDirectory, ProjectExists, GetInfo, StateFileExists, InitExistingProject, InitNewProject, Checkout} from '../wailsjs/go/main/App';
+import { ChangeDirectory, SelectDirectory, ProjectExists, GetInfo, StateFileExists, InitExistingProject, InitNewProject, WorkOn} from '../wailsjs/go/main/App';
 
 document.getElementById('logo').src = logo;
 
@@ -20,7 +20,7 @@ document.getElementById("screen-init-new-project-submit").addEventListener('clic
         return
     }
     if (await StateFileExists(path)) {
-        document.getElementById("screen-init-new-project-status").innerHTML = ".jamhub file already exists in directory."
+        document.getElementById("screen-init-new-project-status").innerHTML = ".jam file already exists in directory."
         return
     }
     
@@ -57,7 +57,7 @@ document.getElementById("screen-init-new-project-path-dialog").addEventListener(
 
 document.getElementById("screen-project-status-workspace-submit").addEventListener("click", async () => {
     const workspaceName = document.getElementById("screen-project-status-workspace-name").value;
-    const result = await Checkout(workspaceName);
+    const result = await WorkOn(workspaceName);
     document.getElementById("screen-project-status-workspace-info").innerHTML = result;
 });
 
@@ -71,7 +71,7 @@ document.getElementById("screen-open-directory-openExistingProject").addEventLis
     await ChangeDirectory(path)
 
     if (!(await StateFileExists(path))) {
-        document.getElementById("screen-open-directory-status").innerHTML = ".jamhub file not found at selected path. Use \"Initialize Project\" to initialize the directory.";
+        document.getElementById("screen-open-directory-status").innerHTML = ".jam file not found at selected path. Use \"Initialize Project\" to initialize the directory.";
         return
     }
 

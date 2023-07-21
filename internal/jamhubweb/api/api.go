@@ -25,7 +25,9 @@ func UserProjectsHandler() gin.HandlerFunc {
 		}
 		defer closer()
 
-		resp, err := tempClient.ListUserProjects(ctx, &pb.ListUserProjectsRequest{})
+		resp, err := tempClient.ListUserProjects(ctx, &pb.ListUserProjectsRequest{
+			OwnerUsername: ctx.Param("username"),
+		})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
@@ -44,14 +46,15 @@ func GetProjectCurrentCommitHandler() gin.HandlerFunc {
 		}
 		defer closer()
 		id, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
-			ProjectName: ctx.Param("projectName"),
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
 		})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		resp, err := tempClient.GetProjectCurrentCommit(ctx, &pb.GetProjectCurrentCommitRequest{ProjectId: id.GetProjectId()})
+		resp, err := tempClient.GetProjectCurrentCommit(ctx, &pb.GetProjectCurrentCommitRequest{ProjectId: id.GetProjectId(), OwnerUsername: ctx.Param("ownerUsername")})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
@@ -72,20 +75,21 @@ func GetWorkspaceInfoHandler() gin.HandlerFunc {
 		defer closer()
 
 		id, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
-			ProjectName: ctx.Param("projectName"),
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
 		})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		workspaceIdResponse, err := tempClient.GetWorkspaceId(ctx, &pb.GetWorkspaceIdRequest{ProjectId: id.GetProjectId(), WorkspaceName: ctx.Param("workspaceName")})
+		workspaceIdResponse, err := tempClient.GetWorkspaceId(ctx, &pb.GetWorkspaceIdRequest{OwnerUsername: ctx.Param("ownerUsername"), ProjectId: id.GetProjectId(), WorkspaceName: ctx.Param("workspaceName")})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		resp, err := tempClient.GetWorkspaceCurrentChange(ctx, &pb.GetWorkspaceCurrentChangeRequest{ProjectId: id.GetProjectId(), WorkspaceId: workspaceIdResponse.WorkspaceId})
+		resp, err := tempClient.GetWorkspaceCurrentChange(ctx, &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: ctx.Param("ownerUsername"), ProjectId: id.GetProjectId(), WorkspaceId: workspaceIdResponse.WorkspaceId})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
@@ -114,7 +118,8 @@ func ProjectBrowseCommitHandler() gin.HandlerFunc {
 		defer closer()
 
 		id, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
-			ProjectName: ctx.Param("projectName"),
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
 		})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
@@ -128,7 +133,7 @@ func ProjectBrowseCommitHandler() gin.HandlerFunc {
 		}
 
 		metadataResult := new(bytes.Buffer)
-		err = file.DownloadCommittedFile(tempClient, id.GetProjectId(), uint64(commitId), ".jamhubfilelist", bytes.NewReader([]byte{}), metadataResult)
+		err = file.DownloadCommittedFile(tempClient, ctx.Param("ownerUsername"), id.GetProjectId(), uint64(commitId), ".jamhubfilelist", bytes.NewReader([]byte{}), metadataResult)
 		if err != nil {
 			ctx.Error(err)
 			return
@@ -143,7 +148,7 @@ func ProjectBrowseCommitHandler() gin.HandlerFunc {
 
 		directoryNames := make([]string, 0, len(fileMetadata.GetFiles()))
 		fileNames := make([]string, 0, len(fileMetadata.GetFiles()))
-		requestPath := filepath.Clean(ctx.Param("path")[1:])
+		requestPath := filepath.Clean(ctx.Query("path"))
 		for path, file := range fileMetadata.GetFiles() {
 			pathDir := filepath.Dir(path)
 			if (path == "" && pathDir == ".") || pathDir == requestPath {
@@ -173,7 +178,8 @@ func ProjectBrowseWorkspaceHandler() gin.HandlerFunc {
 		defer closer()
 
 		id, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
-			ProjectName: ctx.Param("projectName"),
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
 		})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
@@ -186,14 +192,14 @@ func ProjectBrowseWorkspaceHandler() gin.HandlerFunc {
 			return
 		}
 
-		changeId, err := strconv.Atoi(ctx.Param("changeId"))
+		changeId, err := strconv.Atoi(ctx.Query("changeId"))
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
 		}
 
 		metadataResult := new(bytes.Buffer)
-		err = file.DownloadWorkspaceFile(tempClient, id.GetProjectId(), uint64(workspaceId), uint64(changeId), ".jamhubfilelist", bytes.NewReader([]byte{}), metadataResult)
+		err = file.DownloadWorkspaceFile(tempClient, ctx.Param("ownerUsername"), id.GetProjectId(), uint64(workspaceId), uint64(changeId), ".jamhubfilelist", bytes.NewReader([]byte{}), metadataResult)
 		if err != nil {
 			ctx.Error(err)
 			return
@@ -207,7 +213,7 @@ func ProjectBrowseWorkspaceHandler() gin.HandlerFunc {
 
 		directoryNames := make([]string, 0, len(fileMetadata.GetFiles()))
 		fileNames := make([]string, 0, len(fileMetadata.GetFiles()))
-		requestPath := filepath.Clean(ctx.Param("path")[1:])
+		requestPath := filepath.Clean(ctx.Query("path"))
 		for path, file := range fileMetadata.GetFiles() {
 			pathDir := filepath.Dir(path)
 			if (path == "" && pathDir == ".") || pathDir == requestPath {
@@ -237,7 +243,8 @@ func GetFileWorkspaceHandler() gin.HandlerFunc {
 		defer closer()
 
 		config, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
-			ProjectName: ctx.Param("projectName"),
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
 		})
 		if err != nil {
 			ctx.Error(err)
@@ -250,13 +257,13 @@ func GetFileWorkspaceHandler() gin.HandlerFunc {
 			return
 		}
 
-		changeId, err := strconv.Atoi(ctx.Param("changeId"))
+		changeId, err := strconv.Atoi(ctx.Query("changeId"))
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		err = file.DownloadWorkspaceFile(tempClient, config.ProjectId, uint64(workspaceId), uint64(changeId), ctx.Param("path")[1:], bytes.NewReader([]byte{}), ctx.Writer)
+		err = file.DownloadWorkspaceFile(tempClient, ctx.Param("ownerUsername"), config.ProjectId, uint64(workspaceId), uint64(changeId), ctx.Query("path"), bytes.NewReader([]byte{}), ctx.Writer)
 		if err != nil {
 			ctx.Error(err)
 			return
@@ -275,7 +282,8 @@ func GetFileCommitHandler() gin.HandlerFunc {
 		defer closer()
 
 		config, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
-			ProjectName: ctx.Param("projectName"),
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
 		})
 		if err != nil {
 			ctx.Error(err)
@@ -288,7 +296,7 @@ func GetFileCommitHandler() gin.HandlerFunc {
 			return
 		}
 
-		err = file.DownloadCommittedFile(tempClient, config.ProjectId, uint64(commitId), ctx.Param("path")[1:], bytes.NewReader([]byte{}), ctx.Writer)
+		err = file.DownloadCommittedFile(tempClient, ctx.Param("ownerUsername"), config.ProjectId, uint64(commitId), ctx.Query("path"), bytes.NewReader([]byte{}), ctx.Writer)
 		if err != nil {
 			ctx.Error(err)
 			return
@@ -307,7 +315,8 @@ func GetWorkspacesHandler() gin.HandlerFunc {
 		defer closer()
 
 		config, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
-			ProjectName: ctx.Param("projectName"),
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
 		})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
@@ -315,7 +324,8 @@ func GetWorkspacesHandler() gin.HandlerFunc {
 		}
 
 		resp, err := tempClient.ListWorkspaces(ctx, &pb.ListWorkspacesRequest{
-			ProjectId: config.ProjectId,
+			OwnerUsername: ctx.Param("ownerUsername"),
+			ProjectId:     config.ProjectId,
 		})
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
@@ -323,5 +333,70 @@ func GetWorkspacesHandler() gin.HandlerFunc {
 		}
 
 		ctx.JSON(200, resp)
+	}
+}
+
+func GetCollaboratorsHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		accessToken := sessions.Default(ctx).Get("access_token").(string)
+		tempClient, closer, err := jamhubgrpc.Connect(&oauth2.Token{AccessToken: accessToken})
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		defer closer()
+
+		config, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
+		})
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		resp, err := tempClient.GetCollaborators(ctx, &pb.GetCollaboratorsRequest{
+			OwnerUsername: ctx.Param("ownerUsername"),
+			ProjectId:     config.ProjectId,
+		})
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		ctx.JSON(200, resp) // Return correct response
+	}
+}
+
+func AddCollaboratorHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		accessToken := sessions.Default(ctx).Get("access_token").(string)
+		tempClient, closer, err := jamhubgrpc.Connect(&oauth2.Token{AccessToken: accessToken})
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		defer closer()
+
+		config, err := tempClient.GetProjectId(ctx, &pb.GetProjectIdRequest{
+			ProjectName:   ctx.Param("projectName"),
+			OwnerUsername: ctx.Param("ownerUsername"),
+		})
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		resp, err := tempClient.AddCollaborator(ctx, &pb.AddCollaboratorRequest{
+			ProjectId:     config.ProjectId,
+			OwnerUsername: ctx.Param("ownerUsername"),
+			Username:      ctx.Query("username"),
+		})
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		ctx.JSON(200, resp) // Return correct response
 	}
 }
