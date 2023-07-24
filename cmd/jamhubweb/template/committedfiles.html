@@ -34,8 +34,8 @@
     </main>
     {{template "footer.html"}}
     <script>
-        const loc = window.location.href;
-        if (loc.includes("committedfiles") || loc.includes("committedfile") || loc.includes("workspacefile") || loc.includes("workspacefiles")) {
+        console.log(window.location.href)
+        if (window.location.href.includes("committedfiles") || window.location.href.includes("committedfile") || window.location.href.includes("workspacefile") || window.location.href.includes("workspacefiles")) {
             let splitPath = window.location.pathname.split("/");
             let projectUrl =  splitPath.slice(0, 3).join('/') + "/projectinfo";
             document.getElementById("js-project-info").setAttribute("href", projectUrl)

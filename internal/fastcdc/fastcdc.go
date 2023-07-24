@@ -93,6 +93,13 @@ func (opts *Options) setDefaults() {
 	}
 }
 
+func NewJamChunker(rd io.Reader) (*Chunker, error) {
+	return NewChunker(rd, Options{
+		AverageSize: 1024 * 64,
+		Seed:        84372,
+	})
+}
+
 // NewChunker returns a Chunker with the given Options.
 func NewChunker(rd io.Reader, opts Options) (*Chunker, error) {
 	opts.setDefaults()

@@ -17,6 +17,7 @@ service JamHub {
     // rpc GetProjectConfig(GetProjectConfigRequest) returns (ProjectConfig);
 
     // Change operations
+    rpc UpdateWorkspace(UpdateWorkspaceRequest) returns (UpdateWorkspaceResponse);
     rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
     rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (DeleteWorkspaceResponse);
     rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
@@ -159,6 +160,13 @@ message MergeWorkspaceRequest {
 message MergeWorkspaceResponse {
     uint64 commit_id = 1;
 }
+
+message UpdateWorkspaceRequest {
+    uint64 project_id = 1;
+    string owner_username  = 2;
+    uint64 workspace_id = 3;
+}
+message UpdateWorkspaceResponse {}
 
 message CreateWorkspaceRequest {
     uint64 project_id = 1;

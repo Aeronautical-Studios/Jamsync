@@ -13,10 +13,7 @@ import (
 
 func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
 	sig := make([]*pb.ChunkHash, 0)
-	localChunker, err := fastcdc.NewChunker(localReader, fastcdc.Options{
-		AverageSize: 1024 * 64,
-		Seed:        84372,
-	})
+	localChunker, err := fastcdc.NewJamChunker(localReader)
 	if err != nil {
 		return err
 	}
@@ -70,10 +67,7 @@ func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, project
 
 func DownloadWorkspaceFile(client pb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
 	sig := make([]*pb.ChunkHash, 0)
-	localChunker, err := fastcdc.NewChunker(localReader, fastcdc.Options{
-		AverageSize: 1024 * 64,
-		Seed:        84372,
-	})
+	localChunker, err := fastcdc.NewJamChunker(localReader)
 	if err != nil {
 		return err
 	}

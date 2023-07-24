@@ -34,7 +34,7 @@ func Merge() {
 	defer closer()
 
 	if state.CommitInfo != nil {
-		fmt.Println("Currently on a commit, workon a workspace with `jam workon <workspacename>` to push changes.")
+		fmt.Println("Currently on the mainline, use `workon` to make changes.")
 		os.Exit(1)
 	}
 

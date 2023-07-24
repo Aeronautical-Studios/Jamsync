@@ -55,17 +55,6 @@ func New() (closer func(), err error) {
 		grpc.UnaryInterceptor(serverauth.EnsureValidToken),
 	}
 
-	// var cert tls.Certificate
-	// if jamenv.Env() == jamenv.Prod {
-	// 	certManager := autocert.Manager{
-	// 		Prompt:     autocert.AcceptTOS,
-	// 		Cache:      autocert.DirCache("/etc/jamhub/certs"),
-	// 		HostPolicy: autocert.HostWhitelist("grpc.jamhub.dev"),
-	// 		Email:      "help@jamhub.dev",
-	// 	}
-	// 	// cert, err = tls.LoadX509KeyPair("/etc/jamsync/fullchain.pem", "/etc/jamsync/privkey.pem")
-	// 	opts = append(opts, grpc.Creds(credentials.NewTLS(&tls.Config{GetCertificate: certManager.GetCertificate})))
-	// } else {
 	var creds credentials.TransportCredentials
 	if jamenv.Env() == jamenv.Prod {
 		manager := autocert.Manager{
@@ -109,35 +98,9 @@ func New() (closer func(), err error) {
 }
 
 func Connect(accessToken *oauth2.Token) (client pb.JamHubClient, closer func(), err error) {
-	opts := []grpc.DialOption{
-		// grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-		// 	raddr, err := net.ResolveTCPAddr("tcp", addr)
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-
-		// 	conn, err := net.DialTCP("tcp", nil, raddr)
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-
-		// 	return conn, err
-		// }),
-	}
-	// if jamenv.Env() != jamenv.Local {
+	opts := []grpc.DialOption{}
 	perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(accessToken)}
 	opts = append(opts, grpc.WithPerRPCCredentials(perRPC))
-	// }
-	// var creds credentials.TransportCredentials
-	// if jamenv.Env() == jamenv.Prod {
-	// 	cp := x509.NewCertPool()
-	// 	certData, err := prodF.ReadFile("clientkey.pem")
-	// 	if err != nil {
-	// 		return nil, nil, err
-	// 	}
-	// 	cp.AppendCertsFromPEM(certData)
-	// 	creds = credentials.NewClientTLSFromCert(cp, "jamsync.dev")
-	// } else {
 	var creds credentials.TransportCredentials
 	if jamenv.Env() == jamenv.Prod {
 		config := &tls.Config{}

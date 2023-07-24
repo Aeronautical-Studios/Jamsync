@@ -131,6 +131,10 @@ func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId uint6
 	return opLocs, err
 }
 
+func (s *LocalOpLocStore) AddProject(ownerId string, projectId uint64) error {
+	return os.MkdirAll(s.fileDir(ownerId, projectId, 0, []byte("init")), os.ModePerm)
+}
+
 func (s *LocalOpLocStore) DeleteProject(ownerId string, projectId uint64) error {
 	return os.RemoveAll(fmt.Sprintf("jamhubdata/oplocs/%s/%d", ownerId, projectId))
 }

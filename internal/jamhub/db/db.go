@@ -8,6 +8,8 @@ import (
 	"os"
 )
 
+var ProjectAlreadyExists = errors.New("project already exists")
+
 type JamHubDb struct {
 	db *sql.DB
 }
@@ -44,7 +46,7 @@ type Project struct {
 func (j JamHubDb) AddProject(projectName string, ownerUsername string) (uint64, error) {
 	_, err := j.GetProjectId(projectName, ownerUsername)
 	if !errors.Is(sql.ErrNoRows, err) {
-		return 0, fmt.Errorf("project already exists")
+		return 0, ProjectAlreadyExists
 	}
 
 	res, err := j.db.Exec("INSERT INTO projects(name, owner_username) VALUES(?, ?)", projectName, ownerUsername)

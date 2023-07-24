@@ -170,10 +170,7 @@ func uploadWorkspaceFiles(ctx context.Context, apiClient pb.JamHubClient, ownerU
 				if err != nil {
 					results <- nil
 				}
-				sourceChunker, err := fastcdc.NewChunker(file, fastcdc.Options{
-					AverageSize: 1024 * 64,
-					Seed:        84372,
-				})
+				sourceChunker, err := fastcdc.NewJamChunker(file)
 				if err != nil {
 					results <- nil
 				}
@@ -277,10 +274,7 @@ func uploadWorkspaceFile(apiClient pb.JamHubClient, ownerUsername string, projec
 		return err
 	}
 
-	sourceChunker, err := fastcdc.NewChunker(sourceReader, fastcdc.Options{
-		AverageSize: 1024 * 64,
-		Seed:        84372,
-	})
+	sourceChunker, err := fastcdc.NewJamChunker(sourceReader)
 	if err != nil {
 		return err
 	}
@@ -401,10 +395,7 @@ func downloadWorkspaceFiles(ctx context.Context, apiClient pb.JamHubClient, owne
 					continue
 				}
 
-				targetChunker, err := fastcdc.NewChunker(currFile, fastcdc.Options{
-					AverageSize: 1024 * 64,
-					Seed:        84372,
-				})
+				targetChunker, err := fastcdc.NewJamChunker(currFile)
 				if err != nil {
 					results <- err
 					continue
@@ -509,10 +500,7 @@ func downloadCommittedFiles(ctx context.Context, apiClient pb.JamHubClient, owne
 					continue
 				}
 
-				targetChunker, err := fastcdc.NewChunker(currFile, fastcdc.Options{
-					AverageSize: 1024 * 64,
-					Seed:        84372,
-				})
+				targetChunker, err := fastcdc.NewJamChunker(currFile)
 				if err != nil {
 					results <- err
 					continue

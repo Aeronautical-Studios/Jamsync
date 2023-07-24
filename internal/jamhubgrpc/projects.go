@@ -5,7 +5,10 @@ import (
 	"errors"
 
 	"github.com/zdgeier/jamhub/gen/pb"
+	"github.com/zdgeier/jamhub/internal/jamhub/db"
 	"github.com/zdgeier/jamhub/internal/jamhubgrpc/serverauth"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (s JamHub) GetProjectName(ctx context.Context, in *pb.GetProjectNameRequest) (*pb.GetProjectNameResponse, error) {
@@ -50,6 +53,16 @@ func (s JamHub) AddProject(ctx context.Context, in *pb.AddProjectRequest) (*pb.A
 	}
 
 	projectId, err := s.db.AddProject(in.GetProjectName(), username)
+	if errors.Is(err, db.ProjectAlreadyExists) {
+		return nil, status.Error(codes.AlreadyExists, db.ProjectAlreadyExists.Error())
+	}
+
+	err = s.opdatastorecommit.AddProject(username, projectId)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.oplocstorecommit.AddProject(username, projectId)
 	if err != nil {
 		return nil, err
 	}

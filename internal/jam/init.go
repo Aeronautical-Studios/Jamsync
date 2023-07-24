@@ -12,13 +12,18 @@ import (
 	"github.com/zdgeier/jamhub/internal/jam/statefile"
 	"github.com/zdgeier/jamhub/internal/jamhubgrpc"
 	"golang.org/x/oauth2"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func InitNewProject(apiClient pb.JamHubClient, projectName string) {
 	resp, err := apiClient.AddProject(context.Background(), &pb.AddProjectRequest{
 		ProjectName: projectName,
 	})
-	if err != nil {
+	if status.Code(err) == codes.AlreadyExists {
+		fmt.Println("Project already exists")
+		os.Exit(1)
+	} else if err != nil {
 		panic(err)
 	}
 	currentPath, err := os.Getwd()

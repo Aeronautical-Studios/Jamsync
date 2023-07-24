@@ -105,6 +105,10 @@ func (s *LocalStore) Write(ownerUsername string, projectId uint64, pathHash []by
 	return uint64(info.Size()), uint64(writtenBytes), nil
 }
 
+func (s *LocalStore) AddProject(ownerId string, projectId uint64) error {
+	return os.MkdirAll(s.fileDir(ownerId, projectId, []byte("init")), os.ModePerm)
+}
+
 func (s *LocalStore) DeleteProject(ownerId string, projectId uint64) error {
 	return os.RemoveAll(fmt.Sprintf("jamhubdata/%s/%d/opdatacommit", ownerId, projectId))
 }
