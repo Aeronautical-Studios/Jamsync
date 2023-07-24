@@ -142,12 +142,20 @@
             let selectEl = document.getElementById("workspaces");
             selectEl.innerHTML = "";
             let noWorkspaces = document.getElementById("no-workspaces");
+            let found = false;
             for (const workspaceName in workspacesJson.workspaces) {
                 let optionEl = document.createElement("option");
                 optionEl.innerHTML = workspaceName;
                 optionEl.setAttribute("value", workspaceName);
                 selectEl.appendChild(optionEl);
                 selectEl.classList.remove("is-hidden");
+                if (currWorkspaceName == workspaceName) {
+                    found = true;
+                }
+            }
+            if (!found) {
+                // Redirect to main if workspace not found
+                window.location.href = `${projectUrl}/committedfiles/${currentPath}`;
             }
             if (selectEl.classList.contains("is-hidden")) {
                 noWorkspaces.classList.remove("is-hidden");
