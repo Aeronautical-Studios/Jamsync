@@ -57,7 +57,8 @@ func WorkOn() {
 			}
 
 			commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &pb.GetProjectCurrentCommitRequest{
-				ProjectId: state.ProjectId,
+				OwnerUsername: state.OwnerUsername,
+				ProjectId:     state.ProjectId,
 			})
 			if err != nil {
 				log.Panic(err)
@@ -101,25 +102,25 @@ func WorkOn() {
 	}
 
 	if workspaceId, ok := resp.GetWorkspaces()[os.Args[2]]; ok {
-		if workspaceId == state.WorkspaceInfo.WorkspaceId {
+		if state.WorkspaceInfo != nil && workspaceId == state.WorkspaceInfo.WorkspaceId {
 			fmt.Println("Already on", os.Args[2])
 			return
 		}
 
-		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.TODO(), &pb.GetWorkspaceCurrentChangeRequest{ProjectId: state.ProjectId, WorkspaceId: workspaceId})
+		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.TODO(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: workspaceId})
 		if err != nil {
 			panic(err)
 		}
 
 		// if workspace already exists, do a pull
 		fileMetadata := ReadLocalFileList()
-		remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.ChangeId, fileMetadata)
+		remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}
 
 		if DiffHasChanges(remoteToLocalDiff) {
-			err = ApplyFileListDiffWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.ChangeId, remoteToLocalDiff)
+			err = ApplyFileListDiffWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, remoteToLocalDiff)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -136,7 +137,7 @@ func WorkOn() {
 			OwnerUsername: state.OwnerUsername,
 			ProjectId:     state.ProjectId,
 			WorkspaceInfo: &statefile.WorkspaceInfo{
-				WorkspaceId: state.WorkspaceInfo.WorkspaceId,
+				WorkspaceId: workspaceId,
 				ChangeId:    changeResp.ChangeId,
 			},
 		}.Save()

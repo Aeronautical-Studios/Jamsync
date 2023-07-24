@@ -119,14 +119,14 @@ func (s *LocalStore) Write(ownerId string, projectId, workspaceId uint64, pathHa
 	return uint64(info.Size()), uint64(writtenBytes), nil
 }
 
-func (s *LocalStore) GetChangedPathHashes(ownerId string, projectId uint64, workspaceId uint64) ([][]byte, error) {
+func (s *LocalStore) GetChangedPathHashes(ownerId string, projectId uint64, workspaceId uint64) (map[string]interface{}, error) {
 	projectDataDir := fmt.Sprintf("jamhubdata/%s/%d/opdataworkspace/%d", ownerId, projectId, workspaceId)
 	dirs, err := ioutil.ReadDir(projectDataDir)
 	if err != nil {
 		return nil, err
 	}
 
-	pathHashes := make([][]byte, 0)
+	pathHashes := make(map[string]interface{}, 0)
 	for _, dir := range dirs {
 		files, err := ioutil.ReadDir(filepath.Join(projectDataDir, dir.Name()))
 		if err != nil {
@@ -138,7 +138,7 @@ func (s *LocalStore) GetChangedPathHashes(ownerId string, projectId uint64, work
 			if err != nil {
 				return nil, err
 			}
-			pathHashes = append(pathHashes, data)
+			pathHashes[string(data)] = nil
 		}
 	}
 

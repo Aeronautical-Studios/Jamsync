@@ -79,7 +79,7 @@ install:
 	go mod tidy && cd cmd/jamhubweb/editor/ && npm install
 
 installclient:
-	go build -ldflags "-X main.built=`date -u  +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1" -o jam cmd/jamcli/main.go && mv jam ~/bin/jam
+	go build -ldflags "-X main.built=`date -u  +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1" -o jam cmd/jamcli/main.go && cp jam ~/Public/jam && mv jam ~/bin/jam
 
 installclientremote:
 	rm -rf jam_darwin_arm64.zip && wget https://jamhub.dev/public/jam_darwin_arm64.zip && unzip jam_darwin_arm64.zip && mv jam ~/bin/jam && rm -rf jam_darwin_arm64.zip

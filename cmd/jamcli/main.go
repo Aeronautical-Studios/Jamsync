@@ -33,6 +33,8 @@ func main() {
 		jam.Push()
 	case os.Args[1] == "merge":
 		jam.Merge()
+	case os.Args[1] == "update":
+		jam.Update()
 	case os.Args[1] == "workon":
 		jam.WorkOn()
 	case os.Args[1] == "workspaces":

@@ -72,6 +72,14 @@ func (s LocalChangeStore) DeleteWorkspace(ownerUsername string, projectId uint64
 	return deleteWorkspace(db, workspaceId)
 }
 
+func (s LocalChangeStore) UpdateWorkspaceBaseCommit(ownerUsername string, projectId uint64, workspaceId uint64, baseCommitId uint64) error {
+	db, err := s.getLocalProjectDB(ownerUsername, projectId)
+	if err != nil {
+		return err
+	}
+	return updateWorkspaceBaseCommit(db, workspaceId, baseCommitId)
+}
+
 func (s LocalChangeStore) AddWorkspace(ownerUsername string, projectId uint64, workspaceName string, commitId uint64) (uint64, error) {
 	db, err := s.getLocalProjectDB(ownerUsername, projectId)
 	if err != nil {

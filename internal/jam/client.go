@@ -18,7 +18,6 @@ import (
 	"github.com/zdgeier/jamhub/internal/jamhub/file"
 	"github.com/zeebo/xxh3"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func DiffHasChanges(diff *pb.FileMetadataDiff) bool {
@@ -49,16 +48,10 @@ func worker(pathInfos <-chan PathInfo, results chan<- PathFile) {
 			continue
 		}
 
-		stat, err := osFile.Stat()
-		if err != nil {
-			panic(err)
-		}
-
 		var file *pb.File
 		if pathInfo.isDir {
 			file = &pb.File{
-				ModTime: timestamppb.New(stat.ModTime()),
-				Dir:     true,
+				Dir: true,
 			}
 		} else {
 			data, err := os.ReadFile(pathInfo.path)
@@ -70,9 +63,8 @@ func worker(pathInfos <-chan PathInfo, results chan<- PathFile) {
 			b := xxh3.Hash128(data).Bytes()
 
 			file = &pb.File{
-				ModTime: timestamppb.New(stat.ModTime()),
-				Dir:     false,
-				Hash:    b[:],
+				Dir:  false,
+				Hash: b[:],
 			}
 		}
 		osFile.Close()
@@ -243,7 +235,6 @@ func uploadWorkspaceFiles(ctx context.Context, apiClient pb.JamHubClient, ownerU
 					WorkspaceId:   workspaceId,
 					ChangeId:      changeId,
 					PathHash:      pathToHash(path),
-					ModTime:       timestamppb.Now(),
 				})
 				if err != nil {
 					results <- err
@@ -268,7 +259,6 @@ func uploadWorkspaceFile(apiClient pb.JamHubClient, ownerUsername string, projec
 		WorkspaceId:   workspaceId,
 		ChangeId:      changeId - 1,
 		PathHash:      pathToHash(filePath),
-		ModTime:       timestamppb.Now(),
 	})
 	if err != nil {
 		return err
@@ -417,7 +407,6 @@ func downloadWorkspaceFiles(ctx context.Context, apiClient pb.JamHubClient, owne
 					WorkspaceId:   workspaceId,
 					ChangeId:      changeId,
 					PathHash:      pathToHash(path),
-					ModTime:       timestamppb.Now(),
 					ChunkHashes:   sig,
 				})
 				if err != nil {
@@ -521,7 +510,6 @@ func downloadCommittedFiles(ctx context.Context, apiClient pb.JamHubClient, owne
 					OwnerUsername: ownerUsername,
 					CommitId:      commitId,
 					PathHash:      pathToHash(path),
-					ModTime:       timestamppb.Now(),
 					ChunkHashes:   sig,
 				})
 				if err != nil {

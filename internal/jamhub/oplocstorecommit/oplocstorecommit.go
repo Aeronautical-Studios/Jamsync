@@ -2,13 +2,16 @@ package oplocstorecommit
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -129,6 +132,34 @@ func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId uint6
 	opLocs = &pb.CommitOperationLocations{}
 	err = proto.Unmarshal(buf.Bytes(), opLocs)
 	return opLocs, err
+}
+
+func (s *LocalOpLocStore) GetChangedPathHashes(ownerId string, projectId uint64, startCommitId uint64, endCommitId uint64) (map[string]interface{}, error) {
+	pathHashes := make(map[string]interface{}, 0)
+	for i := startCommitId; i <= endCommitId; i-- {
+		commitLocsDir := fmt.Sprintf("jamhubdata/%s/%d/oplocstorecommit/%d", ownerId, projectId, startCommitId)
+		dirs, err := ioutil.ReadDir(commitLocsDir)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, dir := range dirs {
+			files, err := ioutil.ReadDir(filepath.Join(commitLocsDir, dir.Name()))
+			if err != nil {
+				return nil, err
+			}
+
+			for _, file := range files {
+				data, err := hex.DecodeString(strings.TrimSuffix(file.Name(), ".locs"))
+				if err != nil {
+					return nil, err
+				}
+				pathHashes[string(data)] = data
+			}
+		}
+	}
+
+	return pathHashes, nil
 }
 
 func (s *LocalOpLocStore) AddProject(ownerId string, projectId uint64) error {

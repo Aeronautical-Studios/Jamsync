@@ -40,7 +40,7 @@ func ListWorkspaces() {
 		os.Exit(0)
 	}
 
-	resp, err := apiClient.ListWorkspaces(ctx, &pb.ListWorkspacesRequest{ProjectId: state.ProjectId})
+	resp, err := apiClient.ListWorkspaces(ctx, &pb.ListWorkspacesRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId})
 	if err != nil {
 		log.Panic(err)
 	}

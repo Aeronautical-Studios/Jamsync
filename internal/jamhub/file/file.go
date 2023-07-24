@@ -8,7 +8,6 @@ import (
 	"github.com/zdgeier/jamhub/gen/pb"
 	"github.com/zdgeier/jamhub/internal/fastcdc"
 	"github.com/zeebo/xxh3"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
@@ -31,7 +30,6 @@ func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, project
 		OwnerUsername: ownerUsername,
 		CommitId:      commitId,
 		PathHash:      pathToHash(filePath),
-		ModTime:       timestamppb.Now(),
 		ChunkHashes:   sig,
 	})
 	if err != nil {
@@ -86,7 +84,6 @@ func DownloadWorkspaceFile(client pb.JamHubClient, ownerUsername string, project
 		WorkspaceId:   workspaceId,
 		ChangeId:      changeId,
 		PathHash:      pathToHash(filePath),
-		ModTime:       timestamppb.Now(),
 		ChunkHashes:   sig,
 	})
 	if err != nil {

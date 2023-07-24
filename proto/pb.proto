@@ -2,7 +2,6 @@ syntax = "proto3";
 package pb;
 
 option go_package = "github.com/zdgeier/jamhub/proto/pb";
-import "google/protobuf/timestamp.proto";
 
 service JamHub {
     // Project operations
@@ -216,7 +215,6 @@ string owner_username  = 2;
 }
 
 message File {
-    google.protobuf.Timestamp mod_time = 1; 
     bool dir = 2;
     bytes hash = 3;
 }
@@ -334,7 +332,6 @@ message ReadCommittedFileRequest {
     string owner_username  = 2;
     uint64 commit_id = 3;
     bytes path_hash = 4;
-    google.protobuf.Timestamp mod_time = 5; 
     repeated ChunkHash chunk_hashes = 6;
 }
 
@@ -344,7 +341,6 @@ message ReadWorkspaceFileRequest {
     uint64 workspace_id = 3;
     uint64 change_id = 4;
     bytes path_hash = 5;
-    google.protobuf.Timestamp mod_time = 6; 
     repeated ChunkHash chunk_hashes = 7;
 }
 
@@ -354,7 +350,6 @@ message ReadWorkspaceChunkHashesRequest {
     uint64 workspace_id = 3;
     uint64 change_id = 4;
     bytes path_hash = 5;
-    google.protobuf.Timestamp mod_time = 6; 
 }
 
 message ReadWorkspaceChunkHashesResponse {
@@ -366,7 +361,6 @@ message ReadCommitChunkHashesRequest {
     string owner_username  = 2;
     uint64 commit_id = 3;
     bytes path_hash = 4;
-    google.protobuf.Timestamp mod_time = 5; 
 }
 
 message ReadCommitChunkHashesResponse {

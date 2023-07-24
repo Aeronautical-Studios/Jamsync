@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -533,162 +534,193 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 		return nil, errors.New("must be owner or collaborator to merge")
 	}
 
-	prevCommitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.GetProjectId())
-	if err != nil {
-		return nil, err
-	}
+	// prevCommitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.GetProjectId())
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// Regen every file that has been changed in workspace
-	changedPathHashes, err := s.opdatastoreworkspace.GetChangedPathHashes(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	changedWorkspacePathHashes, err := s.opdatastoreworkspace.GetChangedPathHashes(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	if len(changedPathHashes) == 0 {
-		// NO CHANGES
-		return &pb.UpdateWorkspaceResponse{}, nil
+
+	workspaceBaseCommitId, err := s.changestore.GetWorkspaceBaseCommitId(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	if err != nil {
+		panic(err)
 	}
 
-	maxChangeId, err := s.oplocstoreworkspace.MaxChangeId(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	maxCommitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.GetProjectId())
 	if err != nil {
 		return nil, err
 	}
 
-	pathHashes := make(chan []byte)
-	results := make(chan error)
+	changedCommitPathHashes, err := s.oplocstorecommit.GetChangedPathHashes(in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId, maxCommitId)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
 
-	makeDiff := func() {
-		for changedPathHash := range pathHashes {
-			sourceReader, err := s.regenWorkspaceFile(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxChangeId, changedPathHash)
-			if err != nil {
-				panic(err)
-			}
-
-			workspaceOperationLocations, err := s.ReadCommitChunkHashes(ctx, &pb.ReadCommitChunkHashesRequest{
-				ProjectId:     in.GetProjectId(),
-				OwnerUsername: in.GetOwnerUsername(),
-				CommitId:      prevCommitId,
-				PathHash:      []byte(changedPathHash),
-			})
-			if err != nil {
-				panic(err)
-			}
-
-			sourceChunker, err := fastcdc.NewJamChunker(sourceReader)
-			if err != nil {
-				panic(err)
-			}
-
-			opsOut := make(chan *pb.Operation)
-			go func() {
-				defer close(opsOut)
-				err := sourceChunker.CreateDelta(workspaceOperationLocations.GetChunkHashes(), func(op *pb.Operation) error {
-					switch op.Type {
-					case pb.Operation_OpData:
-						b := make([]byte, len(op.Chunk.Data))
-						copy(b, op.Chunk.Data)
-						op.Chunk.Data = b
-					}
-					opsOut <- op
-					return nil
-				})
-				if err != nil {
-					panic(err)
-				}
-			}()
-
-			pathHashToOpLocs := make(map[string][]*pb.CommitOperationLocations_OperationLocation, 0)
-			for op := range opsOut {
-				offset, length, err := s.opdatastorecommit.Write(in.GetOwnerUsername(), in.GetProjectId(), []byte(changedPathHash), op)
-				if err != nil {
-					panic(err)
-				}
-
-				var chunkHash *pb.ChunkHash
-				if op.GetType() == pb.Operation_OpData {
-					chunkHash = &pb.ChunkHash{
-						Offset: op.GetChunk().GetOffset(),
-						Length: op.GetChunk().GetLength(),
-						Hash:   op.GetChunk().GetHash(),
-					}
-				} else {
-					chunkHash = &pb.ChunkHash{
-						Offset: op.GetChunkHash().GetOffset(),
-						Length: op.GetChunkHash().GetLength(),
-						Hash:   op.GetChunkHash().GetHash(),
-					}
-				}
-
-				if op.GetType() == pb.Operation_OpBlock {
-					opLocs, err := s.oplocstorecommit.ListOperationLocations(in.GetOwnerUsername(), in.GetProjectId(), prevCommitId, []byte(changedPathHash))
-					if err != nil {
-						panic(err)
-					}
-					found := false
-					var reusedOffset, reusedLength uint64
-					for _, loc := range opLocs.GetOpLocs() {
-						if loc.GetChunkHash().GetHash() == op.GetChunkHash().GetHash() {
-							found = true
-							reusedOffset = loc.GetOffset()
-							reusedLength = loc.GetLength()
-							break
-						}
-					}
-					if !found {
-						log.Fatal("Operation of type block but hash could not be found")
-					}
-					offset = reusedOffset
-					length = reusedLength
-				}
-
-				operationLocation := &pb.CommitOperationLocations_OperationLocation{
-					Offset:    offset,
-					Length:    length,
-					ChunkHash: chunkHash,
-				}
-				pathHashToOpLocs[string(changedPathHash)] = append(pathHashToOpLocs[string(changedPathHash)], operationLocation)
-			}
-
-			for pathHash, opLocs := range pathHashToOpLocs {
-				err = s.oplocstorecommit.InsertOperationLocations(&pb.CommitOperationLocations{
-					ProjectId:     in.GetProjectId(),
-					OwnerUsername: in.GetOwnerUsername(),
-					CommitId:      prevCommitId + 1,
-					PathHash:      []byte(pathHash),
-					OpLocs:        opLocs,
-				})
-				if err != nil {
-					panic(err)
-				}
-			}
-
-			results <- nil
+	// Check for conflicts
+	conflicts := make(map[string]interface{})
+	for workspacePathHash := range changedWorkspacePathHashes {
+		if _, ok := changedCommitPathHashes[workspacePathHash]; ok {
+			conflicts[string(workspacePathHash)] = nil
 		}
 	}
 
-	for i := 0; i < 64; i++ {
-		go makeDiff()
+	if len(conflicts) != 0 {
+		log.Fatal("YOU HAVE CONFLICTS")
 	}
 
-	go func() {
-		for _, c := range changedPathHashes {
-			pathHashes <- c
-		}
-	}()
-
-	completed := 0
-	for e := range results {
-		if e != nil {
-			panic(e)
-		}
-		completed += 1
-
-		if completed == len(changedPathHashes) {
-			close(pathHashes)
-			close(results)
-		}
+	fmt.Println("HERE")
+	err = s.changestore.UpdateWorkspaceBaseCommit(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxCommitId)
+	if err != nil {
+		return nil, err
 	}
 
 	return &pb.UpdateWorkspaceResponse{}, nil
+
+	// maxChangeId, err := s.oplocstoreworkspace.MaxChangeId(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// pathHashes := make(chan []byte)
+	// results := make(chan error)
+
+	// makeDiff := func() {
+	// 	for pathHash := range pathHashes {
+	// 		sourceReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), maxCommitId, pathHash)
+	// 		if err != nil {
+	// 			panic(err)
+	// 		}
+
+	// 		workspaceOperationLocations, err := s.ReadWorkspaceChunkHashes(ctx, &pb.ReadWorkspaceChunkHashesRequest{
+	// 			ProjectId:     in.GetProjectId(),
+	// 			OwnerUsername: in.GetOwnerUsername(),
+	// 			ChangeId:      maxChangeId,
+	// 			PathHash:      pathHash,
+	// 		})
+	// 		if err != nil {
+	// 			panic(err)
+	// 		}
+
+	// 		sourceChunker, err := fastcdc.NewJamChunker(sourceReader)
+	// 		if err != nil {
+	// 			panic(err)
+	// 		}
+
+	// 		opsOut := make(chan *pb.Operation)
+	// 		go func() {
+	// 			defer close(opsOut)
+	// 			err := sourceChunker.CreateDelta(workspaceOperationLocations.GetChunkHashes(), func(op *pb.Operation) error {
+	// 				switch op.Type {
+	// 				case pb.Operation_OpData:
+	// 					b := make([]byte, len(op.Chunk.Data))
+	// 					copy(b, op.Chunk.Data)
+	// 					op.Chunk.Data = b
+	// 				}
+	// 				opsOut <- op
+	// 				return nil
+	// 			})
+	// 			if err != nil {
+	// 				panic(err)
+	// 			}
+	// 		}()
+
+	// 		pathHashToOpLocs := make(map[string][]*pb.WorkspaceOperationLocations_OperationLocation, 0)
+	// 		for op := range opsOut {
+	// 			offset, length, err := s.opdatastoreworkspace.Write(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), pathHash, op)
+	// 			if err != nil {
+	// 				panic(err)
+	// 			}
+
+	// 			var chunkHash *pb.ChunkHash
+	// 			if op.GetType() == pb.Operation_OpData {
+	// 				chunkHash = &pb.ChunkHash{
+	// 					Offset: op.GetChunk().GetOffset(),
+	// 					Length: op.GetChunk().GetLength(),
+	// 					Hash:   op.GetChunk().GetHash(),
+	// 				}
+	// 			} else {
+	// 				chunkHash = &pb.ChunkHash{
+	// 					Offset: op.GetChunkHash().GetOffset(),
+	// 					Length: op.GetChunkHash().GetLength(),
+	// 					Hash:   op.GetChunkHash().GetHash(),
+	// 				}
+	// 			}
+
+	// 			if op.GetType() == pb.Operation_OpBlock {
+	// 				opLocs, err := s.oplocstoreworkspace.ListOperationLocations(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), prevCommitId, pathHash)
+	// 				if err != nil {
+	// 					panic(err)
+	// 				}
+	// 				found := false
+	// 				var reusedOffset, reusedLength uint64
+	// 				for _, loc := range opLocs.GetOpLocs() {
+	// 					if loc.GetChunkHash().GetHash() == op.GetChunkHash().GetHash() {
+	// 						found = true
+	// 						reusedOffset = loc.GetOffset()
+	// 						reusedLength = loc.GetLength()
+	// 						break
+	// 					}
+	// 				}
+	// 				if !found {
+	// 					log.Fatal("Operation of type block but hash could not be found")
+	// 				}
+	// 				offset = reusedOffset
+	// 				length = reusedLength
+	// 			}
+
+	// 			operationLocation := &pb.WorkspaceOperationLocations_OperationLocation{
+	// 				Offset:    offset,
+	// 				Length:    length,
+	// 				ChunkHash: chunkHash,
+	// 			}
+	// 			pathHashToOpLocs[string(pathHash)] = append(pathHashToOpLocs[string(pathHash)], operationLocation)
+	// 		}
+
+	// 		for pathHash, opLocs := range pathHashToOpLocs {
+	// 			err = s.oplocstoreworkspace.InsertOperationLocations(&pb.WorkspaceOperationLocations{
+	// 				ProjectId:     in.GetProjectId(),
+	// 				OwnerUsername: in.GetOwnerUsername(),
+	// 				WorkspaceId:   in.GetWorkspaceId(),
+	// 				ChangeId:      maxChangeId + 1,
+	// 				PathHash:      []byte(pathHash),
+	// 				OpLocs:        opLocs,
+	// 			})
+	// 			if err != nil {
+	// 				panic(err)
+	// 			}
+	// 		}
+
+	// 		results <- nil
+	// 	}
+	// }
+
+	// for i := 0; i < 64; i++ {
+	// 	go makeDiff()
+	// }
+
+	// go func() {
+	// 	for k := range changedCommitPathHashes {
+	// 		pathHashes <- []byte(k)
+	// 	}
+	// }()
+
+	// completed := 0
+	// for e := range results {
+	// 	if e != nil {
+	// 		panic(e)
+	// 	}
+	// 	completed += 1
+
+	// 	if completed == len(changedCommitPathHashes) {
+	// 		close(pathHashes)
+	// 		close(results)
+	// 	}
+	// }
+
 }
 
 func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest) (*pb.MergeWorkspaceResponse, error) {
@@ -715,9 +747,18 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 		return nil, errors.New("must be owner or collaborator to merge")
 	}
 
+	baseCommitId, err := s.changestore.GetWorkspaceBaseCommitId(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	if err != nil {
+		return nil, err
+	}
+
 	prevCommitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.GetProjectId())
 	if err != nil {
 		return nil, err
+	}
+
+	if baseCommitId != prevCommitId {
+		return nil, errors.New("workspace is not up to date with latest commit")
 	}
 
 	// Regen every file that has been changed in workspace
@@ -745,7 +786,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 				panic(err)
 			}
 
-			workspaceOperationLocations, err := s.ReadCommitChunkHashes(ctx, &pb.ReadCommitChunkHashesRequest{
+			commitOperationLocations, err := s.ReadCommitChunkHashes(ctx, &pb.ReadCommitChunkHashesRequest{
 				ProjectId:     in.GetProjectId(),
 				OwnerUsername: in.GetOwnerUsername(),
 				CommitId:      prevCommitId,
@@ -763,7 +804,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 			opsOut := make(chan *pb.Operation)
 			go func() {
 				defer close(opsOut)
-				err := sourceChunker.CreateDelta(workspaceOperationLocations.GetChunkHashes(), func(op *pb.Operation) error {
+				err := sourceChunker.CreateDelta(commitOperationLocations.GetChunkHashes(), func(op *pb.Operation) error {
 					switch op.Type {
 					case pb.Operation_OpData:
 						b := make([]byte, len(op.Chunk.Data))
@@ -852,8 +893,8 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *pb.MergeWorkspaceRequest
 	}
 
 	go func() {
-		for _, c := range changedPathHashes {
-			pathHashes <- c
+		for k := range changedPathHashes {
+			pathHashes <- []byte(k)
 		}
 	}()
 

@@ -33,7 +33,7 @@ func Pull() {
 	defer closer()
 
 	if state.CommitInfo == nil {
-		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
+		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
 		if err != nil {
 			panic(err)
 		}
@@ -69,7 +69,7 @@ func Pull() {
 			panic(err)
 		}
 	} else {
-		commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &pb.GetProjectCurrentCommitRequest{ProjectId: state.ProjectId})
+		commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &pb.GetProjectCurrentCommitRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId})
 		if err != nil {
 			panic(err)
 		}

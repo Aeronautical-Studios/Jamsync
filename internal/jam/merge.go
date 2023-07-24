@@ -55,7 +55,8 @@ func Merge() {
 		WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
 	})
 	if err != nil {
-		log.Panic(err)
+		fmt.Println("Workspace is not up to date with latest mainline changes. Use `jam update` to update to the workspace.")
+		return
 	}
 
 	_, err = apiClient.DeleteWorkspace(context.Background(), &pb.DeleteWorkspaceRequest{
