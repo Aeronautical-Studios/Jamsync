@@ -48,8 +48,23 @@ func Open() {
 		username = authFile.Username
 	}
 
-	err = browser.OpenURL(url + username + "/" + nameResp.ProjectName + "/committedfiles/")
-	if err != nil {
-		panic(err)
+	if state.WorkspaceInfo != nil {
+		workspaceNameResp, err := apiClient.GetWorkspaceName(context.Background(), &pb.GetWorkspaceNameRequest{
+			ProjectId:     state.ProjectId,
+			OwnerUsername: state.OwnerUsername,
+			WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
+		})
+		if err != nil {
+			panic(err)
+		}
+		err = browser.OpenURL(url + username + "/" + nameResp.ProjectName + "/workspacefiles/" + workspaceNameResp.GetWorkspaceName() + "/")
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		err = browser.OpenURL(url + username + "/" + nameResp.ProjectName + "/committedfiles/")
+		if err != nil {
+			panic(err)
+		}
 	}
 }

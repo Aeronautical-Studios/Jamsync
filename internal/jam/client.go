@@ -364,7 +364,7 @@ func pushFileListDiffWorkspace(apiClient pb.JamHubClient, ownerUsername string, 
 	if err != nil {
 		return err
 	}
-	err = uploadWorkspaceFile(apiClient, ownerUsername, projectId, workspaceId, changeId, ".jamhubfilelist", bytes.NewReader(metadataBytes))
+	err = uploadWorkspaceFile(apiClient, ownerUsername, projectId, workspaceId, changeId, ".jamfilelist", bytes.NewReader(metadataBytes))
 	if err != nil {
 		return err
 	}
@@ -591,7 +591,7 @@ func ApplyFileListDiffCommit(apiClient pb.JamHubClient, ownerId string, projectI
 	}
 	var numFiles int64
 	for _, diff := range fileMetadataDiff.GetDiffs() {
-		if diff.GetType() != pb.FileMetadataDiff_NoOp && diff.GetType() != pb.FileMetadataDiff_Delete && !diff.GetFile().GetDir() {
+		if diff.GetType() != pb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
 			numFiles += 1
 		}
 	}
@@ -606,8 +606,15 @@ func ApplyFileListDiffCommit(apiClient pb.JamHubClient, ownerId string, projectI
 	go downloadCommittedFiles(ctx, apiClient, ownerId, projectId, commitId, paths, results, numFiles)
 
 	for path, diff := range fileMetadataDiff.GetDiffs() {
-		if diff.GetType() != pb.FileMetadataDiff_NoOp && diff.GetType() != pb.FileMetadataDiff_Delete && !diff.GetFile().GetDir() {
-			paths <- path
+		if diff.GetType() != pb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
+			if diff.GetType() == pb.FileMetadataDiff_Delete {
+				err := os.Remove(path)
+				if err != nil {
+					return err
+				}
+			} else {
+				paths <- path
+			}
 		}
 	}
 	close(paths)
@@ -683,14 +690,14 @@ func ApplyFileListDiffWorkspace(apiClient pb.JamHubClient, ownerId string, proje
 	return nil
 }
 
-func DiffRemoteToLocalCommit(apiClient pb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, fileMetadata *pb.FileMetadata) (*pb.FileMetadataDiff, error) {
-	metadataBytes, err := proto.Marshal(fileMetadata)
+func DiffRemoteToLocalCommit(apiClient pb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, localFileMetadata *pb.FileMetadata) (*pb.FileMetadataDiff, error) {
+	metadataBytes, err := proto.Marshal(localFileMetadata)
 	if err != nil {
 		return nil, err
 	}
 	metadataReader := bytes.NewReader(metadataBytes)
 	metadataResult := new(bytes.Buffer)
-	err = file.DownloadCommittedFile(apiClient, ownerUsername, projectId, commitId, ".jamhubfilelist", metadataReader, metadataResult)
+	err = file.DownloadCommittedFile(apiClient, ownerUsername, projectId, commitId, ".jamfilelist", metadataReader, metadataResult)
 	if err != nil {
 		return nil, err
 	}
@@ -701,8 +708,11 @@ func DiffRemoteToLocalCommit(apiClient pb.JamHubClient, ownerUsername string, pr
 		return nil, err
 	}
 
-	fileMetadataDiff := make(map[string]*pb.FileMetadataDiff_FileDiff, len(fileMetadata.GetFiles()))
-	for filePath := range fileMetadata.GetFiles() {
+	fmt.Println("LOCAL", localFileMetadata.GetFiles())
+	fmt.Println("GOT", remoteFileMetadata.GetFiles())
+
+	fileMetadataDiff := make(map[string]*pb.FileMetadataDiff_FileDiff, len(localFileMetadata.GetFiles()))
+	for filePath := range localFileMetadata.GetFiles() {
 		fileMetadataDiff[filePath] = &pb.FileMetadataDiff_FileDiff{
 			Type: pb.FileMetadataDiff_Delete,
 		}
@@ -711,7 +721,7 @@ func DiffRemoteToLocalCommit(apiClient pb.JamHubClient, ownerUsername string, pr
 	for filePath, file := range remoteFileMetadata.GetFiles() {
 		var diffFile *pb.File
 		diffType := pb.FileMetadataDiff_Delete
-		remoteFile, found := fileMetadata.GetFiles()[filePath]
+		remoteFile, found := localFileMetadata.GetFiles()[filePath]
 		if found && proto.Equal(file, remoteFile) {
 			diffType = pb.FileMetadataDiff_NoOp
 		} else if found {
@@ -740,7 +750,7 @@ func DiffRemoteToLocalWorkspace(apiClient pb.JamHubClient, ownerUsername string,
 	}
 	metadataReader := bytes.NewReader(metadataBytes)
 	metadataResult := new(bytes.Buffer)
-	err = file.DownloadWorkspaceFile(apiClient, ownerUsername, projectId, workspaceId, changeId, ".jamhubfilelist", metadataReader, metadataResult)
+	err = file.DownloadWorkspaceFile(apiClient, ownerUsername, projectId, workspaceId, changeId, ".jamfilelist", metadataReader, metadataResult)
 	if err != nil {
 		return nil, err
 	}
@@ -790,7 +800,7 @@ func diffLocalToRemoteCommit(apiClient pb.JamHubClient, ownerUsername string, pr
 	}
 	metadataReader := bytes.NewReader(metadataBytes)
 	metadataResult := new(bytes.Buffer)
-	err = file.DownloadCommittedFile(apiClient, ownerUsername, projectId, commitId, ".jamhubfilelist", metadataReader, metadataResult)
+	err = file.DownloadCommittedFile(apiClient, ownerUsername, projectId, commitId, ".jamfilelist", metadataReader, metadataResult)
 	if err != nil {
 		return nil, err
 	}
@@ -840,7 +850,7 @@ func DiffLocalToRemoteWorkspace(apiClient pb.JamHubClient, ownerId string, proje
 	}
 	metadataReader := bytes.NewReader(metadataBytes)
 	metadataResult := new(bytes.Buffer)
-	err = file.DownloadWorkspaceFile(apiClient, ownerId, projectId, workspaceId, changeId, ".jamhubfilelist", metadataReader, metadataResult)
+	err = file.DownloadWorkspaceFile(apiClient, ownerId, projectId, workspaceId, changeId, ".jamfilelist", metadataReader, metadataResult)
 	if err != nil {
 		return nil, err
 	}

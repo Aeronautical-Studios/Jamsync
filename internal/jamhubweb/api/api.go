@@ -133,7 +133,7 @@ func ProjectBrowseCommitHandler() gin.HandlerFunc {
 		}
 
 		metadataResult := new(bytes.Buffer)
-		err = file.DownloadCommittedFile(tempClient, ctx.Param("ownerUsername"), id.GetProjectId(), uint64(commitId), ".jamhubfilelist", bytes.NewReader([]byte{}), metadataResult)
+		err = file.DownloadCommittedFile(tempClient, ctx.Param("ownerUsername"), id.GetProjectId(), uint64(commitId), ".jamfilelist", bytes.NewReader([]byte{}), metadataResult)
 		if err != nil {
 			ctx.Error(err)
 			return
@@ -199,7 +199,7 @@ func ProjectBrowseWorkspaceHandler() gin.HandlerFunc {
 		}
 
 		metadataResult := new(bytes.Buffer)
-		err = file.DownloadWorkspaceFile(tempClient, ctx.Param("ownerUsername"), id.GetProjectId(), uint64(workspaceId), uint64(changeId), ".jamhubfilelist", bytes.NewReader([]byte{}), metadataResult)
+		err = file.DownloadWorkspaceFile(tempClient, ctx.Param("ownerUsername"), id.GetProjectId(), uint64(workspaceId), uint64(changeId), ".jamfilelist", bytes.NewReader([]byte{}), metadataResult)
 		if err != nil {
 			ctx.Error(err)
 			return

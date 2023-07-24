@@ -631,7 +631,7 @@ import (
 // 			metadataBytes, err := proto.Marshal(tt.args.fileMetadata)
 // 			require.NoError(t, err)
 //
-// 			err = client.UploadFile(ctx, ".jamhubfilelist", bytes.NewReader(metadataBytes))
+// 			err = client.UploadFile(ctx, ".jamfilelist", bytes.NewReader(metadataBytes))
 // 			require.NoError(t, err)
 // 		})
 // 	}

@@ -64,7 +64,7 @@ func WorkOn() {
 				log.Panic(err)
 			}
 
-			diffRemoteToLocalResp, err := DiffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, commitResp.CommitId, &pb.FileMetadata{})
+			diffRemoteToLocalResp, err := DiffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, commitResp.CommitId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -86,7 +86,7 @@ func WorkOn() {
 			}
 			return
 		} else {
-			fmt.Println("Must be on mainline to workon.")
+			fmt.Println("Must be on mainline to `workon` a new workspace.")
 			os.Exit(1)
 		}
 	}
@@ -129,8 +129,6 @@ func WorkOn() {
 					fmt.Println("Pulled", key)
 				}
 			}
-		} else {
-			fmt.Println("No changes to pull")
 		}
 
 		err = statefile.StateFile{
