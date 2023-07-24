@@ -569,10 +569,9 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 	}
 
 	if len(conflicts) != 0 {
-		log.Fatal("YOU HAVE CONFLICTS")
+		return nil, fmt.Errorf("conflict with mainline not supported yet")
 	}
 
-	fmt.Println("HERE")
 	err = s.changestore.UpdateWorkspaceBaseCommit(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxCommitId)
 	if err != nil {
 		return nil, err
