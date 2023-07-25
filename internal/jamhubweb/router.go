@@ -101,6 +101,24 @@ func New(auth *authenticator.Authenticator) http.Handler {
 			Email: session.Get("email"),
 		})
 	})
+	router.GET("/roadmap", middleware.Reauthenticate, func(ctx *gin.Context) {
+		session := sessions.Default(ctx)
+		ctx.HTML(http.StatusOK, "roadmap.html", templateParams{
+			Email: session.Get("email"),
+		})
+	})
+	router.GET("/blog/1", middleware.Reauthenticate, func(ctx *gin.Context) {
+		session := sessions.Default(ctx)
+		ctx.HTML(http.StatusOK, "blog_1.html", templateParams{
+			Email: session.Get("email"),
+		})
+	})
+	router.GET("/blog", middleware.Reauthenticate, func(ctx *gin.Context) {
+		session := sessions.Default(ctx)
+		ctx.HTML(http.StatusOK, "blog.html", templateParams{
+			Email: session.Get("email"),
+		})
+	})
 	router.GET("/privacy", middleware.Reauthenticate, func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "privacy.html", templateParams{
