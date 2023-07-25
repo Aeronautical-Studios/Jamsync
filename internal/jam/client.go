@@ -650,7 +650,7 @@ func ApplyFileListDiffWorkspace(apiClient pb.JamHubClient, ownerId string, proje
 	}
 	var numFiles int64
 	for _, diff := range fileMetadataDiff.GetDiffs() {
-		if diff.GetType() != pb.FileMetadataDiff_NoOp && diff.GetType() != pb.FileMetadataDiff_Delete && !diff.GetFile().GetDir() {
+		if diff.GetType() != pb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
 			numFiles += 1
 		}
 	}
@@ -665,8 +665,15 @@ func ApplyFileListDiffWorkspace(apiClient pb.JamHubClient, ownerId string, proje
 	go downloadWorkspaceFiles(ctx, apiClient, ownerId, projectId, workspaceId, changeId, paths, results, numFiles)
 
 	for path, diff := range fileMetadataDiff.GetDiffs() {
-		if diff.GetType() != pb.FileMetadataDiff_NoOp && diff.GetType() != pb.FileMetadataDiff_Delete && !diff.GetFile().GetDir() {
-			paths <- path
+		if diff.GetType() != pb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
+			if diff.GetType() == pb.FileMetadataDiff_Delete {
+				err := os.Remove(path)
+				if err != nil {
+					return err
+				}
+			} else {
+				paths <- path
+			}
 		}
 	}
 	close(paths)
@@ -707,9 +714,6 @@ func DiffRemoteToLocalCommit(apiClient pb.JamHubClient, ownerUsername string, pr
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println("LOCAL", localFileMetadata.GetFiles())
-	fmt.Println("GOT", remoteFileMetadata.GetFiles())
 
 	fileMetadataDiff := make(map[string]*pb.FileMetadataDiff_FileDiff, len(localFileMetadata.GetFiles()))
 	for filePath := range localFileMetadata.GetFiles() {

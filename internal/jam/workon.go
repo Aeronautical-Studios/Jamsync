@@ -45,6 +45,7 @@ func WorkOn() {
 	}
 
 	if state.CommitInfo == nil || state.WorkspaceInfo != nil {
+		// on commit
 		if os.Args[2] == "main" || os.Args[2] == "mainline" {
 			fileMetadata := ReadLocalFileList()
 			localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
@@ -91,8 +92,10 @@ func WorkOn() {
 		}
 	}
 
+	// on mainline
+
 	if os.Args[2] == "main" || os.Args[2] == "mainline" {
-		fmt.Println("`main` and `mainline` are workspace names reserved for commits. Please choose another workspace name.")
+		fmt.Println("Already on `main`.")
 		os.Exit(1)
 	}
 
@@ -107,13 +110,23 @@ func WorkOn() {
 			return
 		}
 
+		// Check to see if there are any local changes that haven't been pushed
+		fileMetadata := ReadLocalFileList()
+		localToRemoteDiff, err := diffLocalToRemoteCommit(apiClient, state.OwnerUsername, state.ProjectId, state.CommitInfo.CommitId, fileMetadata)
+		if err != nil {
+			log.Panic(err)
+		}
+		if DiffHasChanges(localToRemoteDiff) {
+			fmt.Println("Some changes have occurred on the `mainline` that have not been pushed. Run `jam workon` and `jam push` to save your local changes.")
+			os.Exit(1)
+		}
+
 		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.TODO(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: workspaceId})
 		if err != nil {
 			panic(err)
 		}
 
 		// if workspace already exists, do a pull
-		fileMetadata := ReadLocalFileList()
 		remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, fileMetadata)
 		if err != nil {
 			log.Panic(err)
