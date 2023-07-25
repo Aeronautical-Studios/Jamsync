@@ -61,6 +61,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/samber/lo v1.27.1 // indirect
+	github.com/sergi/go-diff v1.3.1 // indirect
 	github.com/tkrajina/go-reflector v0.5.5 // indirect
 	github.com/ugorji/go/codec v1.1.7 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect

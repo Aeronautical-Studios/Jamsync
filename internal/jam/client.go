@@ -669,7 +669,7 @@ func ApplyFileListDiffWorkspace(apiClient pb.JamHubClient, ownerId string, proje
 			if diff.GetType() == pb.FileMetadataDiff_Delete {
 				err := os.Remove(path)
 				if err != nil {
-					return err
+					fmt.Println(err)
 				}
 			} else {
 				paths <- path
