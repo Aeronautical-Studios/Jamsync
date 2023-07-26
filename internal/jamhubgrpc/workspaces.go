@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -573,9 +572,9 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 	// 	return nil, fmt.Errorf("conflict with mainline not supported yet: %d conflicts", len(conflicts))
 	// }
 
-	for conflict := range bothChangedPathHashes {
-		fmt.Println("BOTH CHANGED", conflict)
-	}
+	// for conflict := range bothChangedPathHashes {
+	// 	fmt.Println("BOTH CHANGED", conflict)
+	// }
 
 	maxChangeId, err := s.oplocstoreworkspace.MaxChangeId(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
 	if err != nil {
@@ -593,7 +592,7 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 				continue
 			}
 
-			fmt.Println("EQUAL?", bytes.Equal(pathHash, file.PathToHash(".jamfilelist")), pathHash, file.PathToHash(".jamfilelist"))
+			// fmt.Println("EQUAL?", bytes.Equal(pathHash, file.PathToHash(".jamfilelist")), pathHash, file.PathToHash(".jamfilelist"))
 			committedBaseFileReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId, pathHash)
 			if err != nil {
 				panic(err)
@@ -614,9 +613,9 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 				panic(err)
 			}
 
-			out, _ := io.ReadAll(mergedFile)
-			fmt.Println("MERGED", string(out))
-			mergedFile.Seek(0, 0)
+			// out, _ := io.ReadAll(mergedFile)
+			// fmt.Println("MERGED", string(out))
+			// mergedFile.Seek(0, 0)
 
 			sourceChunker, err := fastcdc.NewJamChunker(mergedFile)
 			if err != nil {
@@ -738,7 +737,7 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 			panic(e)
 		}
 		completed += 1
-		fmt.Println(completed)
+		// fmt.Println(completed)
 
 		if completed == len(bothChangedPathHashes) {
 			close(pathHashes)
