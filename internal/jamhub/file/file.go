@@ -29,7 +29,7 @@ func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, project
 		ProjectId:     projectId,
 		OwnerUsername: ownerUsername,
 		CommitId:      commitId,
-		PathHash:      pathToHash(filePath),
+		PathHash:      PathToHash(filePath),
 		ChunkHashes:   sig,
 	})
 	if err != nil {
@@ -83,7 +83,7 @@ func DownloadWorkspaceFile(client pb.JamHubClient, ownerUsername string, project
 		OwnerUsername: ownerUsername,
 		WorkspaceId:   workspaceId,
 		ChangeId:      changeId,
-		PathHash:      pathToHash(filePath),
+		PathHash:      PathToHash(filePath),
 		ChunkHashes:   sig,
 	})
 	if err != nil {
@@ -115,7 +115,7 @@ func DownloadWorkspaceFile(client pb.JamHubClient, ownerUsername string, project
 	return err
 }
 
-func pathToHash(path string) []byte {
+func PathToHash(path string) []byte {
 	h := xxh3.Hash128([]byte(path)).Bytes()
 	return h[:]
 }

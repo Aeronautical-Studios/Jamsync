@@ -10,8 +10,8 @@ import (
 	"os"
 
 	"github.com/zdgeier/jamhub/gen/pb"
-	diff3 "github.com/zdgeier/jamhub/internal/diff"
 	"github.com/zdgeier/jamhub/internal/fastcdc"
+	"github.com/zdgeier/jamhub/internal/jamhub/file"
 	"github.com/zdgeier/jamhub/internal/jamhubgrpc/serverauth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -587,11 +587,14 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 
 	makeDiff := func() {
 		for pathHash := range pathHashes {
-			committedBaseFileReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId, pathHash)
-			if err != nil {
-				panic(err)
+			if bytes.Equal(pathHash, file.PathToHash(".jamfilelist")) {
+				// Ignore file list for now since it's not able to be merged
+				results <- nil
+				continue
 			}
-			committedBaseFile, err := io.ReadAll(committedBaseFileReader)
+
+			fmt.Println("EQUAL?", bytes.Equal(pathHash, file.PathToHash(".jamfilelist")), pathHash, file.PathToHash(".jamfilelist"))
+			committedBaseFileReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId, pathHash)
 			if err != nil {
 				panic(err)
 			}
@@ -600,23 +603,22 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 			if err != nil {
 				panic(err)
 			}
-			committedCurrentFile, err := io.ReadAll(committedCurrentFileReader)
-			if err != nil {
-				panic(err)
-			}
 
 			workspaceCurrentFileReader, err := s.regenWorkspaceFile(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxChangeId, pathHash)
 			if err != nil {
 				panic(err)
 			}
-			workspaceCurrentFile, err := io.ReadAll(workspaceCurrentFileReader)
+
+			mergedFile, err := s.mergestore.Merge(in.GetOwnerUsername(), in.GetProjectId(), pathHash, committedBaseFileReader, committedCurrentFileReader, workspaceCurrentFileReader)
 			if err != nil {
 				panic(err)
 			}
 
-			mergeOutput := diff3.Merge(string(committedBaseFile), string(committedCurrentFile), string(workspaceCurrentFile))
-			fmt.Println("OUT", mergeOutput)
-			sourceChunker, err := fastcdc.NewJamChunker(bytes.NewReader([]byte(mergeOutput)))
+			out, _ := io.ReadAll(mergedFile)
+			fmt.Println("MERGED", string(out))
+			mergedFile.Seek(0, 0)
+
+			sourceChunker, err := fastcdc.NewJamChunker(mergedFile)
 			if err != nil {
 				panic(err)
 			}
@@ -736,8 +738,9 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 			panic(e)
 		}
 		completed += 1
+		fmt.Println(completed)
 
-		if completed == len(changedCommitPathHashes) {
+		if completed == len(bothChangedPathHashes) {
 			close(pathHashes)
 			close(results)
 		}

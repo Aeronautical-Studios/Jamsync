@@ -12,6 +12,7 @@ import (
 	"github.com/zdgeier/jamhub/internal/jamenv"
 	"github.com/zdgeier/jamhub/internal/jamhub/changestore"
 	"github.com/zdgeier/jamhub/internal/jamhub/db"
+	"github.com/zdgeier/jamhub/internal/jamhub/mergestore"
 	"github.com/zdgeier/jamhub/internal/jamhub/opdatastorecommit"
 	"github.com/zdgeier/jamhub/internal/jamhub/opdatastoreworkspace"
 	"github.com/zdgeier/jamhub/internal/jamhub/oplocstorecommit"
@@ -38,6 +39,7 @@ type JamHub struct {
 	oplocstoreworkspace  *oplocstoreworkspace.LocalOpLocStore
 	oplocstorecommit     *oplocstorecommit.LocalOpLocStore
 	changestore          changestore.LocalChangeStore
+	mergestore           *mergestore.LocalStore
 	pb.UnimplementedJamHubServer
 }
 
@@ -49,6 +51,7 @@ func New() (closer func(), err error) {
 		oplocstoreworkspace:  oplocstoreworkspace.NewOpLocStoreWorkspace(),
 		oplocstorecommit:     oplocstorecommit.NewOpLocStoreCommit(),
 		changestore:          changestore.NewLocalChangeStore(),
+		mergestore:           mergestore.NewLocalMergeStore(),
 	}
 
 	opts := []grpc.ServerOption{
