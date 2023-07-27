@@ -65,7 +65,7 @@ func (s *LocalStore) Merge(ownerUsername string, projectId uint64, metadataFileP
 		panic(err)
 	}
 
-	out, _ := exec.Command("diff3", "-m", oldPath, minePath, theirsPath).Output()
+	out, _ := exec.Command("diff3", "-m", minePath, oldPath, theirsPath).Output()
 
 	os.Remove(oldPath)
 	os.Remove(minePath)

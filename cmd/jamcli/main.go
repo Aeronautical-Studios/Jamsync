@@ -31,6 +31,8 @@ func main() {
 		jam.Status()
 	case os.Args[1] == "push":
 		jam.Push()
+	case os.Args[1] == "view":
+		jam.View()
 	case os.Args[1] == "merge":
 		jam.Merge()
 	case os.Args[1] == "update":

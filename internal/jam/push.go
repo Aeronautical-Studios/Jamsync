@@ -43,7 +43,7 @@ func Push() {
 		log.Panic(err)
 	}
 
-	changeId := stateFile.WorkspaceInfo.ChangeId + 1
+	changeId := stateFile.WorkspaceInfo.ChangeId
 	if DiffHasChanges(localToRemoteDiff) {
 		err = pushFileListDiffWorkspace(apiClient, stateFile.OwnerUsername, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, changeId, fileMetadata, localToRemoteDiff)
 		if err != nil {
@@ -54,6 +54,7 @@ func Push() {
 				fmt.Println("Pushed", key)
 			}
 		}
+		changeId += 1
 	} else {
 		fmt.Println("No changes to push")
 	}
