@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -576,14 +575,6 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 		}
 	}
 
-	// if len(conflicts) != 0 {
-	// 	return nil, fmt.Errorf("conflict with mainline not supported yet: %d conflicts", len(conflicts))
-	// }
-
-	// for conflict := range bothChangedPathHashes {
-	// 	fmt.Println("BOTH CHANGED", conflict)
-	// }
-
 	maxChangeId, err := s.oplocstoreworkspace.MaxChangeId(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
 	if err != nil {
 		return nil, err
@@ -606,20 +597,17 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("FILE METADATA", fileMetadata.GetFiles())
 
 	makeDiff := func() {
 		for pathHash := range pathHashes {
 			var newContent *bytes.Reader
 			if bytes.Equal(pathHash, file.PathToHash(".jamfilelist")) {
-				fmt.Println("NEW FILE METADATA", fileMetadata.GetFiles())
 				fileMetadataBytes, err := proto.Marshal(fileMetadata)
 				if err != nil {
 					panic(err)
 				}
 				newContent = bytes.NewReader(fileMetadataBytes)
 			} else {
-				// fmt.Println("EQUAL?", bytes.Equal(pathHash, file.PathToHash(".jamfilelist")), pathHash, file.PathToHash(".jamfilelist"))
 				committedBaseFileReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId, pathHash)
 				if err != nil {
 					panic(err)
@@ -657,10 +645,6 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 
 				newContent = mergedFile
 			}
-
-			// out, _ := io.ReadAll(mergedFile)
-			// fmt.Println("MERGED", string(out))
-			// mergedFile.Seek(0, 0)
 
 			sourceChunker, err := fastcdc.NewJamChunker(newContent)
 			if err != nil {
@@ -749,7 +733,6 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 			}
 
 			for pathHash, opLocs := range pathHashToOpLocs {
-				fmt.Println("WRITING", maxChangeId+1)
 				err = s.oplocstoreworkspace.InsertOperationLocations(&pb.WorkspaceOperationLocations{
 					ProjectId:     in.GetProjectId(),
 					OwnerUsername: in.GetOwnerUsername(),
@@ -787,7 +770,6 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 			panic(e)
 		}
 		completed += 1
-		// fmt.Println(completed)
 
 		if completed == len(bothChangedPathHashes)-1 {
 			pathHashes <- []byte(file.PathToHash(".jamfilelist"))

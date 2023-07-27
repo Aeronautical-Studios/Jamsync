@@ -39,7 +39,6 @@ func (s *LocalStore) Merge(ownerUsername string, projectId uint64, metadataFileP
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("OLD", string(oldBytes))
 	oldPath := string(filePath) + ".old"
 	err = os.WriteFile(oldPath, oldBytes, os.ModePerm)
 	if err != nil {
@@ -50,7 +49,6 @@ func (s *LocalStore) Merge(ownerUsername string, projectId uint64, metadataFileP
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("MINE", string(mineBytes))
 	minePath := string(filePath) + ".mine"
 	err = os.WriteFile(minePath, mineBytes, os.ModePerm)
 	if err != nil {
@@ -62,7 +60,6 @@ func (s *LocalStore) Merge(ownerUsername string, projectId uint64, metadataFileP
 		panic(err)
 	}
 	theirsPath := string(filePath) + ".theirs"
-	fmt.Println("THERES", string(theirBytes))
 	err = os.WriteFile(theirsPath, theirBytes, os.ModePerm)
 	if err != nil {
 		panic(err)
@@ -70,10 +67,9 @@ func (s *LocalStore) Merge(ownerUsername string, projectId uint64, metadataFileP
 
 	out, _ := exec.Command("diff3", "-m", oldPath, minePath, theirsPath).Output()
 
-	// os.Remove(oldPath)
-	// os.Remove(minePath)
-	// os.Remove(theirsPath)
-	fmt.Println(out)
+	os.Remove(oldPath)
+	os.Remove(minePath)
+	os.Remove(theirsPath)
 
 	oldString := strings.ReplaceAll(string(out), oldPath, metadataFilePath+".old")
 	mineString := strings.ReplaceAll(string(oldString), minePath, metadataFilePath+".mine")

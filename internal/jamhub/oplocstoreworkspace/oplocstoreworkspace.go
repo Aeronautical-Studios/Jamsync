@@ -96,7 +96,6 @@ func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId, work
 	buf := bytes.NewBuffer(nil)
 	_, err = currFile.Seek(0, 0)
 	if err != nil {
-		fmt.Println("got", err)
 		currFile, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 		if err != nil {
 			panic(err)
