@@ -20,7 +20,6 @@ import (
 	"github.com/zdgeier/jamhub/internal/jamhubweb/callback"
 	"github.com/zdgeier/jamhub/internal/jamhubweb/committedfile"
 	"github.com/zdgeier/jamhub/internal/jamhubweb/committedfiles"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/download"
 	"github.com/zdgeier/jamhub/internal/jamhubweb/login"
 	"github.com/zdgeier/jamhub/internal/jamhubweb/logout"
 	"github.com/zdgeier/jamhub/internal/jamhubweb/middleware"
@@ -113,6 +112,12 @@ func New(auth *authenticator.Authenticator) http.Handler {
 			Email: session.Get("email"),
 		})
 	})
+	router.GET("/download", middleware.Reauthenticate, func(ctx *gin.Context) {
+		session := sessions.Default(ctx)
+		ctx.HTML(http.StatusOK, "download.html", templateParams{
+			Email: session.Get("email"),
+		})
+	})
 	router.GET("/blog", middleware.Reauthenticate, func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "blog.html", templateParams{
@@ -163,7 +168,6 @@ func New(auth *authenticator.Authenticator) http.Handler {
 	router.GET("/:username/:project/committedfiles/*path", middleware.IsAuthenticated, middleware.Reauthenticate, committedfiles.Handler)
 	router.GET("/:username/:project/projectinfo", middleware.IsAuthenticated, middleware.Reauthenticate, projectinfo.Handler)
 	router.GET("/:username/:project/workspacefiles/:workspaceName/*path", middleware.IsAuthenticated, middleware.Reauthenticate, workspacefiles.Handler)
-	router.GET("/download", middleware.IsAuthenticated, middleware.Reauthenticate, download.Handler)
 	return MaxAge(handlers.CompressHandler(router))
 }
 
