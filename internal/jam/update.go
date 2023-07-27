@@ -44,11 +44,6 @@ func Update() {
 		log.Panic(err)
 	}
 
-	changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
-	if err != nil {
-		panic(err)
-	}
-
 	if DiffHasChanges(localToRemoteDiff) {
 		fmt.Println("Some changes locally have not been pushed. Run `jam push` to push your local changes.")
 		return
@@ -63,7 +58,7 @@ func Update() {
 		log.Panic(err)
 	}
 
-	changeResp, err = apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
+	changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
 	if err != nil {
 		panic(err)
 	}
