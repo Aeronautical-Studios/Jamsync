@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -12,8 +13,10 @@ import (
 	"github.com/zdgeier/jamhub/internal/fastcdc"
 	"github.com/zdgeier/jamhub/internal/jamhub/file"
 	"github.com/zdgeier/jamhub/internal/jamhubgrpc/serverauth"
+	"github.com/zeebo/xxh3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s JamHub) CreateWorkspace(ctx context.Context, in *pb.CreateWorkspaceRequest) (*pb.CreateWorkspaceResponse, error) {
@@ -555,6 +558,11 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 		return nil, err
 	}
 
+	if workspaceBaseCommitId == maxCommitId {
+		// Already up to date
+		return nil, errors.New("already up-to-date")
+	}
+
 	changedCommitPathHashes, err := s.oplocstorecommit.GetChangedPathHashes(in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId, maxCommitId)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -584,40 +592,77 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 	pathHashes := make(chan []byte)
 	results := make(chan error)
 
+	fileListReader, err := s.regenWorkspaceFile(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxChangeId, file.PathToHash(".jamfilelist"))
+	if err != nil {
+		panic(err)
+	}
+	fileList, err := io.ReadAll(fileListReader)
+	if err != nil {
+		panic(err)
+	}
+
+	fileMetadata := &pb.FileMetadata{}
+	err = proto.Unmarshal(fileList, fileMetadata)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("FILE METADATA", fileMetadata.GetFiles())
+
 	makeDiff := func() {
 		for pathHash := range pathHashes {
+			var newContent *bytes.Reader
 			if bytes.Equal(pathHash, file.PathToHash(".jamfilelist")) {
-				// Ignore file list for now since it's not able to be merged
-				results <- nil
-				continue
-			}
+				fmt.Println("NEW FILE METADATA", fileMetadata.GetFiles())
+				fileMetadataBytes, err := proto.Marshal(fileMetadata)
+				if err != nil {
+					panic(err)
+				}
+				newContent = bytes.NewReader(fileMetadataBytes)
+			} else {
+				// fmt.Println("EQUAL?", bytes.Equal(pathHash, file.PathToHash(".jamfilelist")), pathHash, file.PathToHash(".jamfilelist"))
+				committedBaseFileReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId, pathHash)
+				if err != nil {
+					panic(err)
+				}
 
-			// fmt.Println("EQUAL?", bytes.Equal(pathHash, file.PathToHash(".jamfilelist")), pathHash, file.PathToHash(".jamfilelist"))
-			committedBaseFileReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId, pathHash)
-			if err != nil {
-				panic(err)
-			}
+				committedCurrentFileReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), maxCommitId, pathHash)
+				if err != nil {
+					panic(err)
+				}
 
-			committedCurrentFileReader, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), maxCommitId, pathHash)
-			if err != nil {
-				panic(err)
-			}
+				workspaceCurrentFileReader, err := s.regenWorkspaceFile(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxChangeId, pathHash)
+				if err != nil {
+					panic(err)
+				}
 
-			workspaceCurrentFileReader, err := s.regenWorkspaceFile(in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxChangeId, pathHash)
-			if err != nil {
-				panic(err)
-			}
+				var specificFilePath string
+				var specificFileMetadata *pb.File
+				for k, v := range fileMetadata.Files {
+					if bytes.Equal(file.PathToHash(k), pathHash) {
+						specificFilePath = k
+						specificFileMetadata = v
+					}
+				}
 
-			mergedFile, err := s.mergestore.Merge(in.GetOwnerUsername(), in.GetProjectId(), pathHash, committedBaseFileReader, committedCurrentFileReader, workspaceCurrentFileReader)
-			if err != nil {
-				panic(err)
+				mergedFile, err := s.mergestore.Merge(in.GetOwnerUsername(), in.GetProjectId(), specificFilePath, committedBaseFileReader, workspaceCurrentFileReader, committedCurrentFileReader)
+				if err != nil {
+					panic(err)
+				}
+
+				mergedData, _ := io.ReadAll(mergedFile)
+				b := xxh3.Hash128(mergedData).Bytes()
+				mergedFile.Seek(0, 0)
+
+				specificFileMetadata.Hash = b[:]
+
+				newContent = mergedFile
 			}
 
 			// out, _ := io.ReadAll(mergedFile)
 			// fmt.Println("MERGED", string(out))
 			// mergedFile.Seek(0, 0)
 
-			sourceChunker, err := fastcdc.NewJamChunker(mergedFile)
+			sourceChunker, err := fastcdc.NewJamChunker(newContent)
 			if err != nil {
 				panic(err)
 			}
@@ -625,7 +670,7 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 			workspaceOperationLocations, err := s.ReadWorkspaceChunkHashes(ctx, &pb.ReadWorkspaceChunkHashesRequest{
 				ProjectId:     in.GetProjectId(),
 				OwnerUsername: in.GetOwnerUsername(),
-				WorkspaceId:   in.WorkspaceId,
+				WorkspaceId:   in.GetWorkspaceId(),
 				ChangeId:      maxChangeId,
 				PathHash:      pathHash,
 			})
@@ -704,6 +749,7 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 			}
 
 			for pathHash, opLocs := range pathHashToOpLocs {
+				fmt.Println("WRITING", maxChangeId+1)
 				err = s.oplocstoreworkspace.InsertOperationLocations(&pb.WorkspaceOperationLocations{
 					ProjectId:     in.GetProjectId(),
 					OwnerUsername: in.GetOwnerUsername(),
@@ -721,12 +767,16 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 		}
 	}
 
-	for i := 0; i < 128; i++ {
+	for i := 0; i < 64; i++ {
 		go makeDiff()
 	}
 
 	go func() {
 		for k := range bothChangedPathHashes {
+			if bytes.Equal([]byte(k), file.PathToHash(".jamfilelist")) {
+				// Ignore file list since we'll add it back once everything is done
+				continue
+			}
 			pathHashes <- []byte(k)
 		}
 	}()
@@ -738,6 +788,10 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *pb.UpdateWorkspaceReque
 		}
 		completed += 1
 		// fmt.Println(completed)
+
+		if completed == len(bothChangedPathHashes)-1 {
+			pathHashes <- []byte(file.PathToHash(".jamfilelist"))
+		}
 
 		if completed == len(bothChangedPathHashes) {
 			close(pathHashes)

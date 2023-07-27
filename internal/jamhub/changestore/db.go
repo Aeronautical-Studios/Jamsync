@@ -3,7 +3,6 @@ package changestore
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 )
 
 func setup(db *sql.DB) error {
@@ -66,7 +65,6 @@ func getWorkspaceNameById(db *sql.DB, workspaceId uint64) (string, error) {
 }
 
 func updateWorkspaceBaseCommit(db *sql.DB, workspaceId uint64, baseCommitId uint64) error {
-	fmt.Println("update", workspaceId, baseCommitId)
 	_, err := db.Exec("UPDATE workspaces SET baseCommitId = ? WHERE rowid = ?", baseCommitId, workspaceId)
 	if err != nil {
 		return err

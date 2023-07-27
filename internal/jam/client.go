@@ -754,6 +754,7 @@ func DiffRemoteToLocalWorkspace(apiClient pb.JamHubClient, ownerUsername string,
 	}
 	metadataReader := bytes.NewReader(metadataBytes)
 	metadataResult := new(bytes.Buffer)
+	fmt.Println("GETTING FILE METADATA AT CHANGE ", changeId)
 	err = file.DownloadWorkspaceFile(apiClient, ownerUsername, projectId, workspaceId, changeId, ".jamfilelist", metadataReader, metadataResult)
 	if err != nil {
 		return nil, err
@@ -764,6 +765,7 @@ func DiffRemoteToLocalWorkspace(apiClient pb.JamHubClient, ownerUsername string,
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("REMOTE", remoteFileMetadata)
 
 	fileMetadataDiff := make(map[string]*pb.FileMetadataDiff_FileDiff, len(fileMetadata.GetFiles()))
 	for filePath := range fileMetadata.GetFiles() {
