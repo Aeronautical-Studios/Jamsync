@@ -45,8 +45,6 @@ func main() {
 		jam.ListProjects()
 	case os.Args[1] == "logout":
 		jam.Logout()
-	case os.Args[1] == "delete":
-		jam.Delete()
 	default:
 		jam.Help(version, built)
 	}

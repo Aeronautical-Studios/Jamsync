@@ -38,6 +38,6 @@ func ListProjects() {
 	}
 
 	for _, proj := range resp.GetProjects() {
-		fmt.Println(proj.GetName())
+		fmt.Println(proj.GetOwnerUsername() + "/" + proj.GetName())
 	}
 }
