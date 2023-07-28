@@ -11,7 +11,7 @@ server:
 # Build ================================
 
 clean:
-	rm -rf jamhub-build && rm -rf .jam && rm -rf jamhub-build.zip && rm -rf jamhubdata/
+	rm -rf jamhub-build .jam jamhub-build.zip jamhubdata/ jamhubweb jamhubweb.zip jamhubgrpc jamhubgrpc.zip
 
 # zipself:
 # 	git archive --format=zip --output jamhub-source.zip HEAD && mkdir -p ./jamhub-build/ && mv jamhub-source.zip ./jamhub-build/
@@ -27,10 +27,10 @@ buildclients:
 	./scripts/buildclients.sh
 
 build-web:
-	GOOS=linux GOARCH=arm64 go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1"  -o jamhubweb cmd/jamhubweb/main.go
+	env GOOS=linux GOARCH=arm64 go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1"  -o jamhubweb cmd/jamhubweb/main.go
 
 build-grpc:
-	GOOS=linux GOARCH=arm64 go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1" -o jamhubgrpc cmd/jamhubgrpc/main.go
+	env GOOS=linux GOARCH=arm64 go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1" -o jamhubgrpc cmd/jamhubgrpc/main.go
 
 # uploadbuildwebeast:
 # 	scp -i ~/jamsynckeypair.pem ./jamhub-build.zip ec2-user@jamhubweb-prod-us-east-2:~/jamhub-build.zip
