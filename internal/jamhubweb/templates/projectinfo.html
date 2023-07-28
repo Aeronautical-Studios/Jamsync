@@ -1,0 +1,55 @@
+{{template "head.html" args
+"title" "Project Info"
+}}
+
+<body>
+    {{template "header.html" args "email" .Email}}
+    <main>
+        <section class="About">
+            <h1 id="js-projectname"></h1>
+            <p class="About-description">
+                Current Commit: <span id="js-current-commit"></span>
+            </p>
+            <p class="About-description">
+                Workspaces: <span id="js-workspaces"></span>
+            </p>
+            <p class="About-description">
+                Collaborators: <span id="js-collaborators"></span>
+           </p>
+        </section>
+        <script>
+            async function update() {
+                let splitPath = window.location.pathname.split("/");
+                let projectUrl =  splitPath.slice(0, 3).join('/');
+                let projectName = splitPath[2];
+                let owner = splitPath[1];
+
+                document.getElementById("js-projectname").innerHTML = projectName;
+                const currentCommitResp = await fetch(`/api/commits/${owner}/${projectName}`);
+                const currentCommitId = (await currentCommitResp.json()).commit_id;
+                if (currentCommitId) {
+                    document.getElementById("js-current-commit").innerHTML = currentCommitId;
+                } else {
+                    document.getElementById("js-current-commit").innerHTML = 0;
+                }
+                const workspaces = await (await fetch(`/api/workspaces/${owner}/${projectName}`)).json();
+                if (workspaces.workspaces != undefined) {
+                    document.getElementById("js-workspaces").innerHTML = JSON.stringify(Object.keys(workspaces.workspaces));
+                } else {
+                    document.getElementById("js-workspaces").innerHTML = "[]";
+                }
+
+                const collaborators = await (await fetch(`/api/collaborators/${owner}/${projectName}`)).json();
+                if (collaborators.usernames != undefined) {
+                    document.getElementById("js-collaborators").innerHTML = JSON.stringify(collaborators.usernames);
+                } else {
+                    document.getElementById("js-collaborators").innerHTML = "[]";
+                }
+            }
+            update();
+
+        </script>
+    </main>
+    {{template "footer.html"}}
+</body>
+{{template "foot.html"}}

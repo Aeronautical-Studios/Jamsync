@@ -11,7 +11,7 @@ server:
 # Build ================================
 
 clean:
-	rm -rf jamhub-build .jam jamhub-build.zip jamhubdata/ jamhubweb jamhubweb.zip jamhubgrpc jamhubgrpc.zip
+	rm -rf jamhub-build .jam jamhub-build.zip jamhubdata/ jamhubweb jamhubweb.zip jamhubgrpc jamhubgrpc.zip build
 
 # zipself:
 # 	git archive --format=zip --output jamhub-source.zip HEAD && mkdir -p ./jamhub-build/ && mv jamhub-source.zip ./jamhub-build/
@@ -23,8 +23,8 @@ build-editor:
 	cd internal/jamhubweb/editor && ./node_modules/.bin/rollup -c rollup.config.mjs && mv *.bundle.js ../assets/
 
 # Needed to be done locally since Mac requires signing binaries. Make sure you have signing env variables setup to do this.
-buildclients:
-	./scripts/buildclients.sh
+build-clients:
+	./scripts/build-clients.sh
 
 build-web:
 	env GOOS=linux GOARCH=arm64 go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.1"  -o jamhubweb cmd/jamhubweb/main.go
@@ -62,9 +62,9 @@ deploy-grpc: clean protos build-grpc deploy-grpc-script
 # Clients
 
 deploy-clients-script:
-	./scripts/deployclients.sh
+	./scripts/deploy-clients.sh
 
-deploy-clients: clean protos buildclients uploadbuildwebeast deploy-clients-script installclientremote
+deploy-clients: clean protos build-clients deploy-clients-script installclientremote
 
 # Local Client ================================
 

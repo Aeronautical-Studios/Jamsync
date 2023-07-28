@@ -22,8 +22,6 @@ jamhub-build.zip
 .vscode
 gen/
 x509/
-internal/jamhubweb/
-Makefile
 
 **node_modules/
 //node_modules/
