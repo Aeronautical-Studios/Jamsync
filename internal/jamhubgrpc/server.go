@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -110,6 +111,7 @@ func Connect(accessToken *oauth2.Token) (client pb.JamHubClient, closer func(), 
 	opts := []grpc.DialOption{}
 	perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(accessToken)}
 	opts = append(opts, grpc.WithPerRPCCredentials(perRPC))
+
 	var creds credentials.TransportCredentials
 	if jamenv.Env() == jamenv.Prod {
 		config := &tls.Config{}
@@ -124,7 +126,9 @@ func Connect(accessToken *oauth2.Token) (client pb.JamHubClient, closer func(), 
 		creds = credentials.NewClientTLSFromCert(cp, "jamsync.dev")
 	}
 
-	opts = append(opts, grpc.WithTransportCredentials(creds))
+	md := metadata.New(map[string]string{"content-type": "application/grpc"})
+
+	opts = append(opts, grpc.WithTransportCredentials(creds), grpc.WithDefaultCallOptions(grpc.Header(&md)))
 
 	addr := "0.0.0.0:14357"
 	if jamenv.Env() == jamenv.Prod {
