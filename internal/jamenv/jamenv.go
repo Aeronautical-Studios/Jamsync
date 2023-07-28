@@ -8,6 +8,7 @@ type JamEnv int
 
 const (
 	Prod JamEnv = iota
+	Staging
 	Local
 )
 
@@ -15,10 +16,12 @@ func (e JamEnv) String() string {
 	switch e {
 	case Prod:
 		return "prod"
+	case Staging:
+		return "staging"
 	case Local:
 		return "local"
 	}
-	return "unknown"
+	panic("unknown JAM_ENV")
 }
 
 func Env() JamEnv {
@@ -26,6 +29,8 @@ func Env() JamEnv {
 	switch jamEnvString {
 	case "local":
 		return Local
+	case "staging":
+		return Staging
 	default:
 		return Prod
 	}

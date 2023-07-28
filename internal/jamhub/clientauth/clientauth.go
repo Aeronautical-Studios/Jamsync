@@ -27,7 +27,7 @@ func AuthorizeUser() (string, error) {
 
 	// construct the authorization URL (with Auth0 as the authorization provider)
 	authorizationURL := fmt.Sprintf(
-		"https://%s/authorize?audience=api.jamsync.dev"+
+		"https://%s/authorize?audience=api.jamhub.dev"+
 			"&scope=write:projects"+
 			"&response_type=code&client_id=%s"+
 			"&code_challenge=%s"+
@@ -66,15 +66,7 @@ func AuthorizeUser() (string, error) {
 				font-family: 'Fira Code';
 				font-style: normal;
 				font-weight: 400;
-				src: url("jamhub.dev/public/FiraCode-Regular.woff2") format("woff2")
-			}
-
-			@font-face {
-				font-display: swap;
-				font-family: 'Fira Code';
-				font-style: normal;
-				font-weight: 800;
-				src: url("jamhub.dev/public/FiraCode-Bold.woff2") format("woff2")
+				src: url("jamhub.dev/public/assets/FiraCode-VF.woff2") format("woff2")
 			}
 			:root {
 				--bright-pink: #ff007f;
@@ -158,17 +150,17 @@ func AuthorizeUser() (string, error) {
 
 	u, err := url.Parse(redirectUrl)
 	if err != nil {
-		return "", fmt.Errorf("bad redirect URL: %s\n", err)
+		return "", fmt.Errorf("bad redirect URL: %s", err)
 	}
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%s", u.Port()))
 	if err != nil {
-		return "", fmt.Errorf("can't listen to port %s: %s\n", fmt.Sprintf(":%s", u.Port()), err)
+		return "", fmt.Errorf("can't listen to port %s: %s", fmt.Sprintf(":%s", u.Port()), err)
 	}
 
 	err = open.Start(authorizationURL)
 	if err != nil {
-		return "", fmt.Errorf("can't open browser to URL %s: %s\n", authorizationURL, err)
+		return "", fmt.Errorf("can't open browser to URL %s: %s", authorizationURL, err)
 	}
 
 	server.Serve(l)
@@ -177,14 +169,18 @@ func AuthorizeUser() (string, error) {
 
 func auth0ClientID() string {
 	if jamenv.Env() == jamenv.Prod {
-		return "RtU3pgK8TjA21ovnPmdPiSMPNY7PHTER"
+		return "9JTlR8hp0gEcv7pfhwWB7U48C2V5lBfT"
+	} else if jamenv.Env() == jamenv.Staging {
+		return "zK5FpSwBoocUzwAMpXmRplLU7JtORcux"
 	}
 	return os.Getenv("AUTH0_CLI_CLIENT_ID")
 }
 
 func auth0Domain() string {
 	if jamenv.Env() == jamenv.Prod {
-		return "jamsync.us.auth0.com"
+		return "0-jamhub-prod.us.auth0.com"
+	} else if jamenv.Env() == jamenv.Staging {
+		return "0-jamhub-staging.us.auth0.com"
 	}
 	return os.Getenv("AUTH0_DOMAIN")
 }

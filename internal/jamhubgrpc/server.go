@@ -26,9 +26,6 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// //go:embed clientkey.pem
-// var prodF embed.FS
-
 //go:embed devclientkey.cer
 var devF embed.FS
 
@@ -68,6 +65,15 @@ func New() (closer func(), err error) {
 		}
 
 		creds = credentials.NewTLS(manager.TLSConfig())
+	} else if jamenv.Env() == jamenv.Staging {
+		manager := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			Cache:      autocert.DirCache("/etc/jamhub/certs"),
+			HostPolicy: autocert.HostWhitelist("us-west-2-staging-jamhubgrpc.jamhub.dev"),
+			Email:      "certs@jamhub.dev",
+		}
+
+		creds = credentials.NewTLS(manager.TLSConfig())
 	} else {
 		cert, err := tls.LoadX509KeyPair(filepath.Clean("x509/publickey.cer"), filepath.Clean("x509/private.key"))
 		if err != nil {
@@ -83,7 +89,7 @@ func New() (closer func(), err error) {
 	pb.RegisterJamHubServer(server, jamhub)
 
 	address := "0.0.0.0:14357"
-	if jamenv.Env() == jamenv.Prod {
+	if jamenv.Env() == jamenv.Prod || jamenv.Env() == jamenv.Staging {
 		address = "0.0.0.0:443"
 	}
 
@@ -123,6 +129,8 @@ func Connect(accessToken *oauth2.Token) (client pb.JamHubClient, closer func(), 
 	addr := "0.0.0.0:14357"
 	if jamenv.Env() == jamenv.Prod {
 		addr = "us-east-2-prod-jamhubgrpc.jamhub.dev:443"
+	} else if jamenv.Env() == jamenv.Staging {
+		addr = "us-west-2-staging-jamhubgrpc.jamhub.dev:443"
 	}
 
 	conn, err := grpc.Dial(addr, opts...)

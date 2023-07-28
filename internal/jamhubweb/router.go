@@ -1,6 +1,7 @@
 package jamhubweb
 
 import (
+	"embed"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -33,23 +34,15 @@ type templateParams struct {
 	Email interface{}
 }
 
+//go:embed templates/* assets/* assets/font/*
+var f embed.FS
+
 func New(auth *authenticator.Authenticator) http.Handler {
-	if jamenv.Env() == jamenv.Prod {
+	if jamenv.Env() == jamenv.Prod || jamenv.Env() == jamenv.Staging {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	router := gin.Default()
-
-	// To store custom types in our cookies,
-	// we must first register them using gob.Register
-	gob.Register(map[string]interface{}{})
-	gob.Register(time.Time{})
-
-	store := cookie.NewStore([]byte("secret"))
-	router.Use(sessions.Sessions("auth-session", store))
-
-	router.Static("/public", "public")
-
-	router.SetFuncMap(template.FuncMap{
+	templ := template.Must(template.New("").Funcs(template.FuncMap{
 		"args": func(kvs ...interface{}) (map[string]interface{}, error) {
 			if len(kvs)%2 != 0 {
 				return nil, errors.New("args requires even number of arguments")
@@ -64,83 +57,105 @@ func New(auth *authenticator.Authenticator) http.Handler {
 			}
 			return m, nil
 		},
-	})
-	router.LoadHTMLGlob("template/*")
+	}).ParseFS(f, "templates/*.html"))
+	router.SetHTMLTemplate(templ)
 
-	router.GET("/", middleware.Reauthenticate, func(ctx *gin.Context) {
+	// To store custom types in our cookies,
+	// we must first register them using gob.Register
+	gob.Register(map[string]interface{}{})
+	gob.Register(time.Time{})
+
+	store := cookie.NewStore([]byte("secret"))
+	router.Use(sessions.Sessions("auth-session", store))
+
+	router.StaticFS("/public", http.FS(f))
+
+	router.GET("/", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "home.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/about", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/about", func(ctx *gin.Context) {
 		ctx.Redirect(http.StatusMovedPermanently, "/")
 	})
-	router.GET("/beta", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/beta", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "beta.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/browse", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/browse", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "browse.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/abuse", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/abuse", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "abuse.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/terms", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/terms", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "terms.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/roadmap", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/roadmap", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "roadmap.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/blog/1", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/blog/1", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "blog_1.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/download", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/download", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "download.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/blog", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/blog", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "blog.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
-	router.GET("/privacy", middleware.Reauthenticate, func(ctx *gin.Context) {
+	router.GET("/privacy", func(ctx *gin.Context) {
 		session := sessions.Default(ctx)
 		ctx.HTML(http.StatusOK, "privacy.html", templateParams{
 			Email: session.Get("email"),
 		})
 	})
 	router.GET("/favicon.ico", func(ctx *gin.Context) {
-		ctx.Header("Content-Type", "image/svg+xml")
-		ctx.File("public/favicon.svg")
+		file, _ := f.ReadFile("assets/favicon.ico")
+		ctx.Data(
+			http.StatusOK,
+			"image/svg+xml",
+			file,
+		)
 	})
-	router.GET("/favicon.svg", func(ctx *gin.Context) {
-		ctx.Header("Content-Type", "image/svg+xml")
-		ctx.File("public/favicon.svg")
-	})
+	// router.GET("/favicon.svg", func(ctx *gin.Context) {
+	// 	file, _ := f.ReadFile("assets/favicon.ico")
+	// 	ctx.Data(
+	// 		http.StatusOK,
+	// 		"image/svg+xml",
+	// 		file,
+	// 	)
+	// })
 	router.GET("/robots.txt", func(ctx *gin.Context) {
-		ctx.Header("Content-Type", "text/plain")
-		ctx.File("public/robots.txt")
+		file, _ := f.ReadFile("assets/robots.txt")
+		ctx.Data(
+			http.StatusOK,
+			"text/plain",
+			file,
+		)
 	})
 	router.GET("/.well-known/acme-challenge/4TqqfL3ONUUMG7OrFYsNy_UzyelKciboqYsmvRamJPc", func(ctx *gin.Context) {
 		ctx.Header("Content-Type", "text/plain")
@@ -180,8 +195,6 @@ func MaxAge(h http.Handler) http.Handler {
 		// Timings are based on github.com/h5bp/server-configs-nginx
 
 		switch ext {
-		case ".rss", ".atom":
-			age = time.Hour / time.Second
 		case ".css", ".js":
 			age = (time.Hour * 24 * 365) / time.Second
 		case ".jpg", ".jpeg", ".gif", ".png", ".ico", ".cur", ".gz", ".svg", ".svgz", ".mp4", ".ogg", ".ogv", ".webm", ".htc", ".woff2":
@@ -191,7 +204,7 @@ func MaxAge(h http.Handler) http.Handler {
 		}
 
 		if ext == ".woff2" {
-			w.Header().Add("Access-Control-Allow-Origin", "https://jamsync.us.auth0.com")
+			w.Header().Add("Access-Control-Allow-Origin", "https://0-prod-jamhub.us.auth0.com,https://0-staging-jamhub.us.auth0.com")
 		}
 
 		if age > 0 {
