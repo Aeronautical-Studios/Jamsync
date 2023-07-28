@@ -478,6 +478,28 @@
             padding: 4px;
             background-color: var(--bright-pink);
         }
+
+        .sib-form-input{
+            background-color: var(--dark-blue);
+            color: white;
+            border: 2px solid var(--bright-pink);
+            padding: 8px;
+            margin-top: 16px;
+            margin-bottom: 16px;
+        }
+        .sib-form-block__button {
+            border: 2px solid var(--bright-pink);
+            background: none;
+            color: white;
+            cursor: pointer;
+            padding: 8px;
+            text-align: right;
+            white-space: nowrap;
+            margin: 16px 16px 0;
+        }
+        .entry__field{
+            display: flex;
+        }
     </style>
     {{if $.customScript}}
         <script async type="module" src="{{$.customScript}}"></script>
