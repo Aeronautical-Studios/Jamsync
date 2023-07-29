@@ -45,7 +45,8 @@ func Open() {
 	username := authFile.Username
 	if jamenv.Env() == jamenv.Local {
 		url = "http://localhost/"
-		username = authFile.Username
+	} else if jamenv.Env() == jamenv.Staging {
+		url = "https://staging.jamhub.dev/"
 	}
 
 	if state.WorkspaceInfo != nil {

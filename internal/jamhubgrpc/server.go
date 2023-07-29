@@ -41,6 +41,13 @@ type JamHub struct {
 	pb.UnimplementedJamHubServer
 }
 
+func Hostname() string {
+	if jamenv.Env() == jamenv.Local {
+		return "0.0.0.0:14357"
+	}
+	return jamenv.Site().String() + "-" + jamenv.Env().String() + "-jamhubgrpc.jamhub.dev"
+}
+
 func New() (closer func(), err error) {
 	jamhub := JamHub{
 		db:                   db.New(),
@@ -61,16 +68,7 @@ func New() (closer func(), err error) {
 		manager := autocert.Manager{
 			Prompt:     autocert.AcceptTOS,
 			Cache:      autocert.DirCache("/etc/jamhub/certs"),
-			HostPolicy: autocert.HostWhitelist("us-east-2-prod-jamhubgrpc.jamhub.dev"),
-			Email:      "certs@jamhub.dev",
-		}
-
-		creds = credentials.NewTLS(manager.TLSConfig())
-	} else if jamenv.Env() == jamenv.Staging {
-		manager := autocert.Manager{
-			Prompt:     autocert.AcceptTOS,
-			Cache:      autocert.DirCache("/etc/jamhub/certs"),
-			HostPolicy: autocert.HostWhitelist("us-west-2-staging-jamhubgrpc.jamhub.dev"),
+			HostPolicy: autocert.HostWhitelist(Hostname()),
 			Email:      "certs@jamhub.dev",
 		}
 
@@ -130,14 +128,14 @@ func Connect(accessToken *oauth2.Token) (client pb.JamHubClient, closer func(), 
 
 	opts = append(opts, grpc.WithTransportCredentials(creds), grpc.WithDefaultCallOptions(grpc.Header(&md)))
 
-	addr := "0.0.0.0:14357"
-	if jamenv.Env() == jamenv.Prod {
-		addr = "us-east-2-prod-jamhubgrpc.jamhub.dev:443"
-	} else if jamenv.Env() == jamenv.Staging {
-		addr = "us-west-2-staging-jamhubgrpc.jamhub.dev:443"
-	}
+	// addr := "0.0.0.0:14357"
+	// if jamenv.Env() == jamenv.Prod {
+	// 	addr = "us-east-2-prod-jamhubgrpc.jamhub.dev:443"
+	// } else if jamenv.Env() == jamenv.Staging {
+	// 	addr = "us-west-2-staging-jamhubgrpc.jamhub.dev:443"
+	// }
 
-	conn, err := grpc.Dial(addr, opts...)
+	conn, err := grpc.Dial(Hostname(), opts...)
 	if err != nil {
 		log.Panicf("could not connect to jamhub server: %s", err)
 	}

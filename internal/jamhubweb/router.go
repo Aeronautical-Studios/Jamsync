@@ -2,11 +2,13 @@ package jamhubweb
 
 import (
 	"embed"
+	"encoding/base64"
 	"encoding/gob"
 	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -16,18 +18,18 @@ import (
 	"github.com/gorilla/handlers"
 
 	"github.com/zdgeier/jamhub/internal/jamenv"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/api"
 	"github.com/zdgeier/jamhub/internal/jamhubweb/authenticator"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/callback"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/committedfile"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/committedfiles"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/login"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/logout"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/middleware"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/projectinfo"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/userprojects"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/workspacefile"
-	"github.com/zdgeier/jamhub/internal/jamhubweb/workspacefiles"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/api"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/callback"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/committedfile"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/committedfiles"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/login"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/logout"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/middleware"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/projectinfo"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/userprojects"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/workspacefile"
+	"github.com/zdgeier/jamhub/internal/jamhubweb/routes/workspacefiles"
 )
 
 type templateParams struct {
@@ -65,8 +67,29 @@ func New(auth *authenticator.Authenticator) http.Handler {
 	gob.Register(map[string]interface{}{})
 	gob.Register(time.Time{})
 
-	store := cookie.NewStore([]byte("secret"))
-	router.Use(sessions.Sessions("auth-session", store))
+	// generate a cookie store with a secret key
+
+	oldHashKey := "f75WynbdzG2t/uEfQVHRtVEuSgh/86asdUFSHPwvpUtivWvrI0DzVm8ma9toHYXwbeH7E2/nMUTOhlItAlQpOw=="
+	oldBlockKey := "SSDculSl3XKtpQGczjbAfUu2O0qj2jfpjg2D9wOBknGuhJAIyp36xVrypYf1qKo62ZARgaUGcxRGASgAYaS51Q=="
+	if jamenv.Env() == jamenv.Prod || jamenv.Env() == jamenv.Staging {
+		oldHashKey = os.Getenv("JAM_SESSION_OLD_HASH_KEY")
+		oldBlockKey = os.Getenv("JAM_SESSION_OLD_BLOCK_KEY")
+	}
+
+	newHashKey := "+ahRiMl2QZTb9yaPU2fjiN+Ou7QbUQ2wLsy3ppZsOLwU6/uHcAKhCrEcaFZvAZ19RvlB197fBgqve6l+k50rlg=="
+	newBlockKey := "gLlzJemJ+YT79fXFbBPatli6ahM1JLSCI7alMWaYoZiVZVJ9ixg5dOlTZY4mzu7rheQ7KLeDWj3B8ybUJQItew=="
+	if jamenv.Env() == jamenv.Prod || jamenv.Env() == jamenv.Staging {
+		newHashKey = os.Getenv("JAM_SESSION_NEW_HASH_KEY")
+		newBlockKey = os.Getenv("JAM_SESSION_NEW_BLOCK_KEY")
+	}
+
+	newHashKeyBytes, _ := base64.StdEncoding.DecodeString(newHashKey)
+	newBlockKeyBytes, _ := base64.StdEncoding.DecodeString(newBlockKey)
+	oldHashKeyBytes, _ := base64.StdEncoding.DecodeString(oldHashKey)
+	oldBlockKeyBytes, _ := base64.StdEncoding.DecodeString(oldBlockKey)
+
+	store := cookie.NewStore(newHashKeyBytes, newBlockKeyBytes, oldHashKeyBytes, oldBlockKeyBytes)
+	router.Use(sessions.Sessions("jamhub-session", store))
 
 	router.StaticFS("/public", http.FS(f))
 
@@ -134,7 +157,7 @@ func New(auth *authenticator.Authenticator) http.Handler {
 		})
 	})
 	router.GET("/favicon.ico", func(ctx *gin.Context) {
-		file, _ := f.ReadFile("assets/favicon.ico")
+		file, _ := f.ReadFile("assets/favicon.svg")
 		ctx.Data(
 			http.StatusOK,
 			"image/svg+xml",
@@ -142,7 +165,7 @@ func New(auth *authenticator.Authenticator) http.Handler {
 		)
 	})
 	// router.GET("/favicon.svg", func(ctx *gin.Context) {
-	// 	file, _ := f.ReadFile("assets/favicon.ico")
+	// 	file, _ := f.ReadFile("assets/favicon.svg")
 	// 	ctx.Data(
 	// 		http.StatusOK,
 	// 		"image/svg+xml",
@@ -150,12 +173,13 @@ func New(auth *authenticator.Authenticator) http.Handler {
 	// 	)
 	// })
 	router.GET("/robots.txt", func(ctx *gin.Context) {
-		file, _ := f.ReadFile("assets/robots.txt")
-		ctx.Data(
-			http.StatusOK,
-			"text/plain",
-			file,
-		)
+		if jamenv.Env() == jamenv.Prod && jamenv.Site() == jamenv.USEast2 {
+			ctx.String(http.StatusOK, "User-agent: *\nAllow: /")
+			return
+		} else {
+			ctx.String(http.StatusOK, "User-agent: *\nDisallow: /")
+			return
+		}
 	})
 	router.GET("/.well-known/acme-challenge/4TqqfL3ONUUMG7OrFYsNy_UzyelKciboqYsmvRamJPc", func(ctx *gin.Context) {
 		ctx.Header("Content-Type", "text/plain")

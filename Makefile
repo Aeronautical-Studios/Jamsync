@@ -9,7 +9,7 @@ server:
 	JAM_ENV=local go run cmd/jamhubgrpc/main.go
 
 clean:
-	rm -rf jamhub-build .jam jamhub-build.zip jamhubdata/ jamhubweb jamhubweb.zip jamhubgrpc jamhubgrpc.zip build
+	rm -rf jamhub-build .jam jamhub-build.zip jamhubdata/ jamhubweb jamhubweb.zip jamhubgrpc jamhubgrpc.zip build jamhubgrpc jamhubgrpc.zip
 
 protos:
 	protoc --proto_path=proto --go_out=gen/pb --go_opt=paths=source_relative --go-grpc_out=gen/pb --go-grpc_opt=paths=source_relative proto/*.proto
@@ -37,7 +37,8 @@ deploy-web-staging-us-west-2: clean protos build-editor build-web deploy-web-scr
 # GRPC
 
 build-grpc:
-	env GOOS=linux GOARCH=arm64 go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.2" -o jamhubgrpc cmd/jamhubgrpc/main.go
+	CC=aarch64-linux-gnu-gcc CXX=arm64-linux-musl-g++ GOARCH=arm64 GOOS=linux CGO_ENABLED=1 go build -ldflags "-X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.2 -linkmode external -extldflags -static" -o jamhubgrpc cmd/jamhubgrpc/main.go
+# CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++ CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags "-linkmode external -extldflags -static -X main.built=`date -u +%Y-%m-%d+%H:%M:%S` -X main.version=v0.0.2" -o jamhubgrpc cmd/jamhubgrpc/main.go
 
 deploy-grpc-script-prod-us-east-2:
 	./scripts/deploy-grpc-prod-us-east-2.sh
@@ -85,6 +86,12 @@ ssh-prod-web-us-east-2:
 
 ssh-prod-grpc-us-east-2:
 	ssh -i ~/jamsynckeypair.pem ec2-user@jamhubgrpc-prod-us-east-2
+
+ssh-prod-web-us-west-2:
+	ssh -i ~/jamhubkeypair-us-west-2-prod.pem ec2-user@jamhubweb-prod-us-west-2
+
+ssh-prod-grpc-us-west-2:
+	ssh -i ~/jamhubkeypair-us-west-2-prod.pem ec2-user@jamhubgrpc-prod-us-west-2
 
 ssh-staging-web-us-west-2:
 	ssh -i ~/jamsynckeypair-staging.pem ec2-user@jamhubweb-staging-us-west-2

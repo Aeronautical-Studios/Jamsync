@@ -23,6 +23,11 @@
         <div class="Header-bottomRight">
             <a class="Header-bottomLink" href="/{{.email}}/projects">{{$.email}}</a>
         </div>
+        <script async>
+            // populate email element with cookie
+            const emailEl = document.querySelector(".Header-bottomRight a");
+            const email = document.cookie.split(";").find((c) => c.includes("email")).split("=")[1];
+        </script>
         {{end}}
     </div>
 </header>
