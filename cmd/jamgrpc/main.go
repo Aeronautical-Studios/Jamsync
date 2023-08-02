@@ -26,13 +26,13 @@ func main() {
 	if err != nil {
 		log.Panic(err)
 	}
-	log.Println("JamHub server is running...")
+	log.Println("Jam gRPC server is running...")
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
 	<-done
 
-	log.Println("JamHub server is stopping...")
+	log.Println("Jam gRPC server is stopping...")
 
 	closer()
 }
