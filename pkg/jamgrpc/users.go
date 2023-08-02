@@ -3,11 +3,11 @@ package jamgrpc
 import (
 	"context"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
 )
 
-func (s JamHub) CreateUser(ctx context.Context, in *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
+func (s JamHub) CreateUser(ctx context.Context, in *jampb.CreateUserRequest) (*jampb.CreateUserResponse, error) {
 	id, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -17,10 +17,10 @@ func (s JamHub) CreateUser(ctx context.Context, in *pb.CreateUserRequest) (*pb.C
 	if err != nil {
 		return nil, err
 	}
-	return &pb.CreateUserResponse{}, nil
+	return &jampb.CreateUserResponse{}, nil
 }
 
-func (s JamHub) CurrentUser(ctx context.Context, in *pb.CurrentUserRequest) (*pb.CurrentUserResponse, error) {
+func (s JamHub) CurrentUser(ctx context.Context, in *jampb.CurrentUserRequest) (*jampb.CurrentUserResponse, error) {
 	id, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -31,9 +31,9 @@ func (s JamHub) CurrentUser(ctx context.Context, in *pb.CurrentUserRequest) (*pb
 		return nil, err
 	}
 
-	return &pb.CurrentUserResponse{Username: username}, nil
+	return &jampb.CurrentUserResponse{Username: username}, nil
 }
 
-func (s JamHub) Ping(ctx context.Context, in *pb.PingRequest) (*pb.Pong, error) {
-	return &pb.Pong{}, nil
+func (s JamHub) Ping(ctx context.Context, in *jampb.PingRequest) (*jampb.Pong, error) {
+	return &jampb.Pong{}, nil
 }

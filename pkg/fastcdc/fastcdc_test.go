@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 )
 
 var defaultOpts = Options{
@@ -19,7 +19,7 @@ var defaultOpts = Options{
 var defaultData = randBytes(4321, 7291)
 
 // Chunks generated with defaultOpts from defaultData
-var defaultChunks []*pb.Chunk = []*pb.Chunk{
+var defaultChunks []*jampb.Chunk = []*jampb.Chunk{
 	{
 		Offset:      0,
 		Length:      520,

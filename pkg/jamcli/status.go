@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
@@ -32,7 +32,7 @@ func Status() {
 	}
 	defer closer()
 
-	nameResp, err := apiClient.GetProjectName(context.Background(), &pb.GetProjectNameRequest{
+	nameResp, err := apiClient.GetProjectName(context.Background(), &jampb.GetProjectNameRequest{
 		OwnerUsername: state.OwnerUsername,
 		ProjectId:     state.ProjectId,
 	})
@@ -42,7 +42,7 @@ func Status() {
 	fmt.Printf("Project:   %s\n", nameResp.ProjectName)
 
 	if state.WorkspaceInfo != nil {
-		workspaceNameResp, err := apiClient.GetWorkspaceName(context.Background(), &pb.GetWorkspaceNameRequest{
+		workspaceNameResp, err := apiClient.GetWorkspaceName(context.Background(), &jampb.GetWorkspaceNameRequest{
 			ProjectId:     state.ProjectId,
 			OwnerUsername: state.OwnerUsername,
 			WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
@@ -57,7 +57,7 @@ func Status() {
 			state.WorkspaceInfo.ChangeId,
 		)
 
-		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
+		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &jampb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
 		if err != nil {
 			panic(err)
 		}
@@ -72,7 +72,7 @@ func Status() {
 			if DiffHasChanges(localToRemoteDiff) {
 				fmt.Println("\nModified files:")
 				for path, diff := range localToRemoteDiff.Diffs {
-					if diff.Type != pb.FileMetadataDiff_NoOp {
+					if diff.Type != jampb.FileMetadataDiff_NoOp {
 						fmt.Println("  " + path)
 					}
 				}

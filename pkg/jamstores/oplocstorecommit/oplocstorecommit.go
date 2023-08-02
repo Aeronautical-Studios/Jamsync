@@ -15,7 +15,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -48,7 +48,7 @@ func NewOpLocStoreCommit() *LocalOpLocStore {
 	}
 }
 
-func (s *LocalOpLocStore) InsertOperationLocations(opLocs *pb.CommitOperationLocations) error {
+func (s *LocalOpLocStore) InsertOperationLocations(opLocs *jampb.CommitOperationLocations) error {
 	var (
 		currFile *os.File
 		err      error
@@ -103,7 +103,7 @@ func (s *LocalOpLocStore) MaxCommitId(ownerId string, projectId uint64) (uint64,
 	return uint64(maxChangeId), nil
 }
 
-func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId uint64, commitId uint64, pathHash []byte) (opLocs *pb.CommitOperationLocations, err error) {
+func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId uint64, commitId uint64, pathHash []byte) (opLocs *jampb.CommitOperationLocations, err error) {
 	filePath := s.filePath(ownerId, projectId, commitId, pathHash)
 
 	_, err = os.Stat(filePath)
@@ -129,7 +129,7 @@ func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId uint6
 	}
 	s.mu.Unlock()
 
-	opLocs = &pb.CommitOperationLocations{}
+	opLocs = &jampb.CommitOperationLocations{}
 	err = proto.Unmarshal(buf.Bytes(), opLocs)
 	return opLocs, err
 }

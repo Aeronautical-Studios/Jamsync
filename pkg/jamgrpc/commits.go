@@ -7,12 +7,12 @@ import (
 	"log"
 	"os"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/fastcdc"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
 )
 
-func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *pb.GetProjectCurrentCommitRequest) (*pb.GetProjectCurrentCommitResponse, error) {
+func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *jampb.GetProjectCurrentCommitRequest) (*jampb.GetProjectCurrentCommitResponse, error) {
 	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -41,12 +41,12 @@ func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *pb.GetProjectCu
 		return nil, err
 	}
 
-	return &pb.GetProjectCurrentCommitResponse{
+	return &jampb.GetProjectCurrentCommitResponse{
 		CommitId: commitId,
 	}, err
 }
 
-func (s JamHub) ReadCommitChunkHashes(ctx context.Context, in *pb.ReadCommitChunkHashesRequest) (*pb.ReadCommitChunkHashesResponse, error) {
+func (s JamHub) ReadCommitChunkHashes(ctx context.Context, in *jampb.ReadCommitChunkHashesRequest) (*jampb.ReadCommitChunkHashesResponse, error) {
 	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		if in.GetProjectId() != 1 {
@@ -80,19 +80,19 @@ func (s JamHub) ReadCommitChunkHashes(ctx context.Context, in *pb.ReadCommitChun
 	if err != nil {
 		return nil, err
 	}
-	sig := make([]*pb.ChunkHash, 0)
-	err = targetChunker.CreateSignature(func(ch *pb.ChunkHash) error {
+	sig := make([]*jampb.ChunkHash, 0)
+	err = targetChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
 		sig = append(sig, ch)
 		return nil
 	})
-	return &pb.ReadCommitChunkHashesResponse{
+	return &jampb.ReadCommitChunkHashesResponse{
 		ChunkHashes: sig,
 	}, err
 }
 
 func (s JamHub) regenCommittedFile(ownerUsername string, projectId uint64, commitId uint64, pathHash []byte) (*bytes.Reader, error) {
 	var err error
-	var operationLocations *pb.CommitOperationLocations
+	var operationLocations *jampb.CommitOperationLocations
 	for i := int(commitId); i >= 0 && operationLocations == nil; i-- {
 		operationLocations, err = s.oplocstorecommit.ListOperationLocations(ownerUsername, projectId, uint64(i), pathHash)
 		if err != nil {
@@ -103,7 +103,7 @@ func (s JamHub) regenCommittedFile(ownerUsername string, projectId uint64, commi
 		return bytes.NewReader([]byte{}), nil
 	}
 
-	ops := make(chan *pb.Operation)
+	ops := make(chan *jampb.Operation)
 	go func() {
 		for _, loc := range operationLocations.GetOpLocs() {
 			op, err := s.opdatastorecommit.Read(ownerUsername, projectId, pathHash, loc.GetOffset(), loc.GetLength())
@@ -129,7 +129,7 @@ func (s JamHub) regenCommittedFile(ownerUsername string, projectId uint64, commi
 	return bytes.NewReader(result.Bytes()), nil
 }
 
-func (s JamHub) ReadCommittedFile(in *pb.ReadCommittedFileRequest, srv pb.JamHub_ReadCommittedFileServer) error {
+func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.JamHub_ReadCommittedFileServer) error {
 	userId, err := serverauth.ParseIdFromCtx(srv.Context())
 	if err != nil {
 		return err
@@ -171,17 +171,17 @@ func (s JamHub) ReadCommittedFile(in *pb.ReadCommittedFileRequest, srv pb.JamHub
 		return err
 	}
 
-	opsOut := make(chan *pb.Operation)
+	opsOut := make(chan *jampb.Operation)
 	tot := 0
 	go func() {
 		var blockCt, dataCt, bytes int
 		defer close(opsOut)
-		err := sourceChunker.CreateDelta(in.GetChunkHashes(), func(op *pb.Operation) error {
+		err := sourceChunker.CreateDelta(in.GetChunkHashes(), func(op *jampb.Operation) error {
 			tot += int(op.Chunk.GetLength()) + int(op.ChunkHash.GetLength())
 			switch op.Type {
-			case pb.Operation_OpBlock:
+			case jampb.Operation_OpBlock:
 				blockCt++
-			case pb.Operation_OpData:
+			case jampb.Operation_OpData:
 				b := make([]byte, len(op.Chunk.Data))
 				copy(b, op.Chunk.Data)
 				op.Chunk.Data = b
@@ -197,7 +197,7 @@ func (s JamHub) ReadCommittedFile(in *pb.ReadCommittedFileRequest, srv pb.JamHub
 	}()
 
 	for op := range opsOut {
-		err = srv.Send(&pb.CommittedFileOperation{
+		err = srv.Send(&jampb.CommittedFileOperation{
 			ProjectId:     in.GetProjectId(),
 			OwnerUsername: in.GetOwnerUsername(),
 			PathHash:      in.GetPathHash(),

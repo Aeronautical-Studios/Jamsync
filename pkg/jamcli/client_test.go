@@ -10,7 +10,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
-	"github.com/zdgeier/jam/gen/pb"
+	jampb "github.com/zdgeier/jam/gen/pb"
 	"github.com/zdgeier/jam/pkg/jamenv"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
 	"github.com/zdgeier/jam/pkg/jamstores/file"
@@ -19,7 +19,7 @@ import (
 
 var serverRunning = false
 
-func setup() (pb.JamHubClient, func(), error) {
+func setup() (jampb.JamHubClient, func(), error) {
 	if !serverRunning {
 		if jamenv.Env() == jamenv.Local {
 			err := os.RemoveAll("jamhubdata/")
@@ -51,12 +51,12 @@ func TestClient_UploadDownloadWorkspaceFile(t *testing.T) {
 	ownerUsername := "testOwner"
 	projectName := "UploadDownloadWorkspaceFile"
 
-	addProjectResp, err := apiClient.AddProject(context.Background(), &pb.AddProjectRequest{
+	addProjectResp, err := apiClient.AddProject(context.Background(), &jampb.AddProjectRequest{
 		ProjectName: projectName,
 	})
 	require.NoError(t, err)
 
-	resp, err := apiClient.CreateWorkspace(ctx, &pb.CreateWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceName: os.Args[2]})
+	resp, err := apiClient.CreateWorkspace(ctx, &jampb.CreateWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceName: os.Args[2]})
 	if err != nil {
 		log.Panic(err)
 	}
@@ -129,7 +129,7 @@ func TestClient_UploadDownloadMergedFile(t *testing.T) {
 	ownerUsername := "testOwner"
 	projectName := "UploadDownloadMergedFile"
 
-	addProjectResp, err := apiClient.AddProject(context.Background(), &pb.AddProjectRequest{
+	addProjectResp, err := apiClient.AddProject(context.Background(), &jampb.AddProjectRequest{
 		ProjectName: projectName,
 	})
 	require.NoError(t, err)
@@ -194,7 +194,7 @@ func TestClient_UploadDownloadMergedFile(t *testing.T) {
 
 	for _, fileOperation := range fileOperations {
 		t.Run(fileOperation.name, func(t *testing.T) {
-			resp, err := apiClient.CreateWorkspace(ctx, &pb.CreateWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceName: fileOperation.workspaceName})
+			resp, err := apiClient.CreateWorkspace(ctx, &jampb.CreateWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceName: fileOperation.workspaceName})
 			if err != nil {
 				log.Panic(err)
 			}
@@ -208,7 +208,7 @@ func TestClient_UploadDownloadMergedFile(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, fileOperation.data, result.Bytes())
 
-			mergeResp, err := apiClient.MergeWorkspace(ctx, &pb.MergeWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceId: resp.WorkspaceId})
+			mergeResp, err := apiClient.MergeWorkspace(ctx, &jampb.MergeWorkspaceRequest{OwnerUsername: ownerUsername, ProjectId: addProjectResp.ProjectId, WorkspaceId: resp.WorkspaceId})
 			if err != nil {
 				log.Panic(err)
 			}

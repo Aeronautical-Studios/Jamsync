@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
@@ -57,7 +57,7 @@ func WorkOn() {
 				os.Exit(1)
 			}
 
-			commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &pb.GetProjectCurrentCommitRequest{
+			commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &jampb.GetProjectCurrentCommitRequest{
 				OwnerUsername: state.OwnerUsername,
 				ProjectId:     state.ProjectId,
 			})
@@ -99,7 +99,7 @@ func WorkOn() {
 		os.Exit(1)
 	}
 
-	resp, err := apiClient.ListWorkspaces(ctx, &pb.ListWorkspacesRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId})
+	resp, err := apiClient.ListWorkspaces(ctx, &jampb.ListWorkspacesRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId})
 	if err != nil {
 		panic(err)
 	}
@@ -121,7 +121,7 @@ func WorkOn() {
 			os.Exit(1)
 		}
 
-		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.TODO(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: workspaceId})
+		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.TODO(), &jampb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: workspaceId})
 		if err != nil {
 			panic(err)
 		}
@@ -138,7 +138,7 @@ func WorkOn() {
 				log.Panic(err)
 			}
 			for key, val := range remoteToLocalDiff.GetDiffs() {
-				if val.Type != pb.FileMetadataDiff_NoOp {
+				if val.Type != jampb.FileMetadataDiff_NoOp {
 					fmt.Println("Pulled", key)
 				}
 			}
@@ -157,7 +157,7 @@ func WorkOn() {
 		}
 	} else {
 		// otherwise, just create a new workspace
-		resp, err := apiClient.CreateWorkspace(ctx, &pb.CreateWorkspaceRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceName: os.Args[2]})
+		resp, err := apiClient.CreateWorkspace(ctx, &jampb.CreateWorkspaceRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceName: os.Args[2]})
 		if err != nil {
 			log.Panic(err)
 		}

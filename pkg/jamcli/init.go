@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
@@ -16,8 +16,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func InitNewProject(apiClient pb.JamHubClient, projectName string) {
-	resp, err := apiClient.AddProject(context.Background(), &pb.AddProjectRequest{
+func InitNewProject(apiClient jampb.JamHubClient, projectName string) {
+	resp, err := apiClient.AddProject(context.Background(), &jampb.AddProjectRequest{
 		ProjectName: projectName,
 	})
 	if status.Code(err) == codes.AlreadyExists {
@@ -32,7 +32,7 @@ func InitNewProject(apiClient pb.JamHubClient, projectName string) {
 	}
 	fmt.Println("Initializing a project at " + currentPath + ". Uploading files...")
 
-	workspaceResp, err := apiClient.CreateWorkspace(context.TODO(), &pb.CreateWorkspaceRequest{OwnerUsername: resp.GetOwnerUsername(), ProjectId: resp.ProjectId, WorkspaceName: "init"})
+	workspaceResp, err := apiClient.CreateWorkspace(context.TODO(), &jampb.CreateWorkspaceRequest{OwnerUsername: resp.GetOwnerUsername(), ProjectId: resp.ProjectId, WorkspaceName: "init"})
 	if err != nil {
 		log.Panic(err)
 	}
@@ -49,7 +49,7 @@ func InitNewProject(apiClient pb.JamHubClient, projectName string) {
 	}
 
 	fmt.Println("Merging...")
-	mergeResp, err := apiClient.MergeWorkspace(context.Background(), &pb.MergeWorkspaceRequest{
+	mergeResp, err := apiClient.MergeWorkspace(context.Background(), &jampb.MergeWorkspaceRequest{
 		ProjectId:     resp.GetProjectId(),
 		OwnerUsername: resp.GetOwnerUsername(),
 		WorkspaceId:   workspaceResp.WorkspaceId,
@@ -58,7 +58,7 @@ func InitNewProject(apiClient pb.JamHubClient, projectName string) {
 		panic(err)
 	}
 
-	_, err = apiClient.DeleteWorkspace(context.Background(), &pb.DeleteWorkspaceRequest{
+	_, err = apiClient.DeleteWorkspace(context.Background(), &jampb.DeleteWorkspaceRequest{
 		OwnerUsername: resp.GetOwnerUsername(),
 		ProjectId:     resp.GetProjectId(),
 		WorkspaceId:   workspaceResp.WorkspaceId,
@@ -80,8 +80,8 @@ func InitNewProject(apiClient pb.JamHubClient, projectName string) {
 	fmt.Println("Done! Run `jam workon <workspace name>` to start making changes.")
 }
 
-func InitExistingProject(apiClient pb.JamHubClient, ownerUsername string, projectName string) {
-	resp, err := apiClient.GetProjectId(context.Background(), &pb.GetProjectIdRequest{
+func InitExistingProject(apiClient jampb.JamHubClient, ownerUsername string, projectName string) {
+	resp, err := apiClient.GetProjectId(context.Background(), &jampb.GetProjectIdRequest{
 		OwnerUsername: ownerUsername,
 		ProjectName:   projectName,
 	})
@@ -89,7 +89,7 @@ func InitExistingProject(apiClient pb.JamHubClient, ownerUsername string, projec
 		log.Panic(err)
 	}
 
-	commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &pb.GetProjectCurrentCommitRequest{
+	commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &jampb.GetProjectCurrentCommitRequest{
 		OwnerUsername: ownerUsername,
 		ProjectId:     resp.GetProjectId(),
 	})
@@ -97,7 +97,7 @@ func InitExistingProject(apiClient pb.JamHubClient, ownerUsername string, projec
 		log.Panic(err)
 	}
 
-	diffRemoteToLocalResp, err := DiffRemoteToLocalCommit(apiClient, ownerUsername, resp.ProjectId, commitResp.CommitId, &pb.FileMetadata{})
+	diffRemoteToLocalResp, err := DiffRemoteToLocalCommit(apiClient, ownerUsername, resp.ProjectId, commitResp.CommitId, &jampb.FileMetadata{})
 	if err != nil {
 		log.Panic(err)
 	}

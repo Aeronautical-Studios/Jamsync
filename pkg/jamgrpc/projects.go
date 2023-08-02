@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
 	"github.com/zdgeier/jam/pkg/jamstores/db"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-func (s JamHub) GetProjectName(ctx context.Context, in *pb.GetProjectNameRequest) (*pb.GetProjectNameResponse, error) {
+func (s JamHub) GetProjectName(ctx context.Context, in *jampb.GetProjectNameRequest) (*jampb.GetProjectNameResponse, error) {
 	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -36,12 +36,12 @@ func (s JamHub) GetProjectName(ctx context.Context, in *pb.GetProjectNameRequest
 		return nil, err
 	}
 
-	return &pb.GetProjectNameResponse{
+	return &jampb.GetProjectNameResponse{
 		ProjectName: projectName,
 	}, nil
 }
 
-func (s JamHub) AddProject(ctx context.Context, in *pb.AddProjectRequest) (*pb.AddProjectResponse, error) {
+func (s JamHub) AddProject(ctx context.Context, in *jampb.AddProjectRequest) (*jampb.AddProjectResponse, error) {
 	id, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -67,13 +67,13 @@ func (s JamHub) AddProject(ctx context.Context, in *pb.AddProjectRequest) (*pb.A
 		return nil, err
 	}
 
-	return &pb.AddProjectResponse{
+	return &jampb.AddProjectResponse{
 		ProjectId:     projectId,
 		OwnerUsername: username,
 	}, nil
 }
 
-func (s JamHub) GetCollaborators(ctx context.Context, in *pb.GetCollaboratorsRequest) (*pb.GetCollaboratorsResponse, error) {
+func (s JamHub) GetCollaborators(ctx context.Context, in *jampb.GetCollaboratorsRequest) (*jampb.GetCollaboratorsResponse, error) {
 	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -102,12 +102,12 @@ func (s JamHub) GetCollaborators(ctx context.Context, in *pb.GetCollaboratorsReq
 		return nil, err
 	}
 
-	return &pb.GetCollaboratorsResponse{
+	return &jampb.GetCollaboratorsResponse{
 		Usernames: usernames,
 	}, nil
 }
 
-func (s JamHub) AddCollaborator(ctx context.Context, in *pb.AddCollaboratorRequest) (*pb.AddCollaboratorResponse, error) {
+func (s JamHub) AddCollaborator(ctx context.Context, in *jampb.AddCollaboratorRequest) (*jampb.AddCollaboratorResponse, error) {
 	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -136,10 +136,10 @@ func (s JamHub) AddCollaborator(ctx context.Context, in *pb.AddCollaboratorReque
 		return nil, err
 	}
 
-	return &pb.AddCollaboratorResponse{}, nil
+	return &jampb.AddCollaboratorResponse{}, nil
 }
 
-func (s JamHub) ListUserProjects(ctx context.Context, in *pb.ListUserProjectsRequest) (*pb.ListUserProjectsResponse, error) {
+func (s JamHub) ListUserProjects(ctx context.Context, in *jampb.ListUserProjectsRequest) (*jampb.ListUserProjectsResponse, error) {
 	id, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -160,15 +160,15 @@ func (s JamHub) ListUserProjects(ctx context.Context, in *pb.ListUserProjectsReq
 		return nil, err
 	}
 
-	projectsPb := make([]*pb.ListUserProjectsResponse_Project, 0, len(projects)+len(collabProjects))
+	projectsPb := make([]*jampb.ListUserProjectsResponse_Project, 0, len(projects)+len(collabProjects))
 	for _, p := range projects {
-		projectsPb = append(projectsPb, &pb.ListUserProjectsResponse_Project{OwnerUsername: p.OwnerUsername, Name: p.Name, Id: p.Id})
+		projectsPb = append(projectsPb, &jampb.ListUserProjectsResponse_Project{OwnerUsername: p.OwnerUsername, Name: p.Name, Id: p.Id})
 	}
 	for _, p := range collabProjects {
-		projectsPb = append(projectsPb, &pb.ListUserProjectsResponse_Project{OwnerUsername: p.OwnerUsername, Name: p.Name, Id: p.Id})
+		projectsPb = append(projectsPb, &jampb.ListUserProjectsResponse_Project{OwnerUsername: p.OwnerUsername, Name: p.Name, Id: p.Id})
 	}
 
-	return &pb.ListUserProjectsResponse{Projects: projectsPb}, nil
+	return &jampb.ListUserProjectsResponse{Projects: projectsPb}, nil
 }
 
 func (s JamHub) ProjectIdOwner(owner string, projectId uint64) (bool, error) {
@@ -241,7 +241,7 @@ func (s JamHub) ProjectAccessible(owner string, projectName string, currentUsern
 	return false, nil
 }
 
-func (s JamHub) GetProjectId(ctx context.Context, in *pb.GetProjectIdRequest) (*pb.GetProjectIdResponse, error) {
+func (s JamHub) GetProjectId(ctx context.Context, in *jampb.GetProjectIdRequest) (*jampb.GetProjectIdResponse, error) {
 	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -268,10 +268,10 @@ func (s JamHub) GetProjectId(ctx context.Context, in *pb.GetProjectIdRequest) (*
 		return nil, err
 	}
 
-	return &pb.GetProjectIdResponse{ProjectId: projectId}, nil
+	return &jampb.GetProjectIdResponse{ProjectId: projectId}, nil
 }
 
-func (s JamHub) DeleteProject(ctx context.Context, in *pb.DeleteProjectRequest) (*pb.DeleteProjectResponse, error) {
+func (s JamHub) DeleteProject(ctx context.Context, in *jampb.DeleteProjectRequest) (*jampb.DeleteProjectResponse, error) {
 	id, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -309,7 +309,7 @@ func (s JamHub) DeleteProject(ctx context.Context, in *pb.DeleteProjectRequest) 
 	if err != nil {
 		return nil, err
 	}
-	return &pb.DeleteProjectResponse{
+	return &jampb.DeleteProjectResponse{
 		ProjectId:   projectId,
 		ProjectName: projectName,
 	}, nil

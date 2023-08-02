@@ -12,7 +12,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -45,7 +45,7 @@ func NewOpLocStoreWorkspace() *LocalOpLocStore {
 	}
 }
 
-func (s *LocalOpLocStore) InsertOperationLocations(opLocs *pb.WorkspaceOperationLocations) error {
+func (s *LocalOpLocStore) InsertOperationLocations(opLocs *jampb.WorkspaceOperationLocations) error {
 	var (
 		currFile *os.File
 		err      error
@@ -74,7 +74,7 @@ func (s *LocalOpLocStore) InsertOperationLocations(opLocs *pb.WorkspaceOperation
 	return err
 }
 
-func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId, workspaceId, changeId uint64, pathHash []byte) (opLocs *pb.WorkspaceOperationLocations, err error) {
+func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId, workspaceId, changeId uint64, pathHash []byte) (opLocs *jampb.WorkspaceOperationLocations, err error) {
 	filePath := s.filePath(ownerId, projectId, workspaceId, changeId, pathHash)
 	_, err = os.Stat(filePath)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
@@ -112,7 +112,7 @@ func (s *LocalOpLocStore) ListOperationLocations(ownerId string, projectId, work
 	}
 	s.mu.Unlock()
 
-	opLocs = &pb.WorkspaceOperationLocations{}
+	opLocs = &jampb.WorkspaceOperationLocations{}
 	err = proto.Unmarshal(buf.Bytes(), opLocs)
 	if err != nil {
 		panic(err)

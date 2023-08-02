@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 )
 
 type RandReader struct {
@@ -119,7 +119,7 @@ func Test_GenData(t *testing.T) {
 		sourceBuffer := bytes.NewReader(p.Source.Data)
 		targetBuffer := bytes.NewReader(p.Target.Data)
 
-		sig := make([]*pb.ChunkHash, 0, 10)
+		sig := make([]*jampb.ChunkHash, 0, 10)
 		sourceChunker, err := NewChunker(sourceBuffer, Options{
 			AverageSize: 1024 * 64,
 			Seed:        84372,
@@ -131,24 +131,24 @@ func Test_GenData(t *testing.T) {
 		})
 		assertNoError(t, err)
 
-		err = targetChunker.CreateSignature(func(ch *pb.ChunkHash) error {
+		err = targetChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
 			sig = append(sig, ch)
 			return nil
 		})
 		if err != nil {
 			t.Errorf("Failed to create signature: %s", err)
 		}
-		opsOut := make(chan *pb.Operation)
+		opsOut := make(chan *jampb.Operation)
 		tot := 0
 		go func() {
 			var blockCt, dataCt, bytes int
 			defer close(opsOut)
-			err := sourceChunker.CreateDelta(sig, func(op *pb.Operation) error {
+			err := sourceChunker.CreateDelta(sig, func(op *jampb.Operation) error {
 				tot += int(op.Chunk.GetLength()) + int(op.ChunkHash.GetLength())
 				switch op.Type {
-				case pb.Operation_OpBlock:
+				case jampb.Operation_OpBlock:
 					blockCt++
-				case pb.Operation_OpData:
+				case jampb.Operation_OpData:
 					b := make([]byte, len(op.Chunk.Data))
 					copy(b, op.Chunk.Data)
 					op.Chunk.Data = b

@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
@@ -50,7 +50,7 @@ func Push() {
 			log.Panic(err)
 		}
 		for key, val := range localToRemoteDiff.GetDiffs() {
-			if val.Type != pb.FileMetadataDiff_NoOp {
+			if val.Type != jampb.FileMetadataDiff_NoOp {
 				fmt.Println("Pushed", key)
 			}
 		}

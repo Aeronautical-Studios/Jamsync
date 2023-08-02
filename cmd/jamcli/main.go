@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	_ "net/http/pprof"
 	"os"
 
 	"github.com/zdgeier/jam/pkg/jamcli"

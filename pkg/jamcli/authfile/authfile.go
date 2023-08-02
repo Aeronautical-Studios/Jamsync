@@ -10,7 +10,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamenv"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
 	"github.com/zdgeier/jam/pkg/jamstores/clientauth"
@@ -57,7 +57,7 @@ func Authorize() (AuthFile, error) {
 
 		ctx := context.Background()
 
-		resp, err := apiClient.CurrentUser(ctx, &pb.CurrentUserRequest{})
+		resp, err := apiClient.CurrentUser(ctx, &jampb.CurrentUserRequest{})
 		if err != nil {
 			fmt.Println("Log into the website first to create your account.")
 		}
@@ -93,7 +93,7 @@ func Authorize() (AuthFile, error) {
 	}
 	defer closer()
 
-	_, err = apiClient.CurrentUser(context.Background(), &pb.CurrentUserRequest{})
+	_, err = apiClient.CurrentUser(context.Background(), &jampb.CurrentUserRequest{})
 	if err != nil {
 		// If outdated token
 		err := os.Remove(authPath())

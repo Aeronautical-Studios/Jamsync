@@ -7,7 +7,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zeebo/xxh3"
 )
 
@@ -161,19 +161,19 @@ func (c *Chunker) fillBuffer() error {
 
 // Next returns the next Chunk from the reader or io.EOF after the last chunk has been
 // read. The chunk data is invalidated when Next is called again.
-func (c *Chunker) Next() (*pb.Chunk, error) {
+func (c *Chunker) Next() (*jampb.Chunk, error) {
 	if err := c.fillBuffer(); err != nil {
-		return &pb.Chunk{}, err
+		return &jampb.Chunk{}, err
 	}
 	if len(c.buf) == 0 {
-		return &pb.Chunk{}, io.EOF
+		return &jampb.Chunk{}, io.EOF
 	}
 
 	length, fp := c.nextChunk(c.buf[c.cursor:])
 
 	hash := xxh3.Hash(c.buf[c.cursor : c.cursor+int(length)])
 
-	chunk := &pb.Chunk{
+	chunk := &jampb.Chunk{
 		Offset:      c.offset,
 		Length:      length,
 		Data:        c.buf[c.cursor : c.cursor+int(length)],

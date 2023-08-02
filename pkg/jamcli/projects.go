@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
 	"golang.org/x/oauth2"
@@ -32,7 +32,7 @@ func ListProjects() {
 		log.Panic(err)
 	}
 
-	resp, err := apiClient.ListUserProjects(ctx, &pb.ListUserProjectsRequest{})
+	resp, err := apiClient.ListUserProjects(ctx, &jampb.ListUserProjectsRequest{})
 	if err != nil {
 		log.Panic(err)
 	}

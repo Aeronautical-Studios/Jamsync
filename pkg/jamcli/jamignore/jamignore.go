@@ -8,21 +8,14 @@ import (
 
 type JamHubIgnorer struct {
 	gitignorer *gitignore.GitIgnore
+	jamignorer *gitignore.GitIgnore
 }
 
-func (j *JamHubIgnorer) ImportPatterns(filepath string) error {
-	// file, err := os.ReadFile(filepath)
-	// if err != nil {
-	// 	return nil
-	// }
+func (j *JamHubIgnorer) ImportPatterns() error {
+	jamignorer, _ := gitignore.CompileIgnoreFile(".jamignore")
+	j.jamignorer = jamignorer
 
-	// patterns := strings.Split(string(file), "\n")
-
-	// fmt.Println(patterns)
-	gitignorer, err := gitignore.CompileIgnoreFile(filepath) // gitignore.CompileIgnoreLines(patterns...)
-	if err != nil {
-		return err
-	}
+	gitignorer, _ := gitignore.CompileIgnoreFile(".gitignore")
 	j.gitignorer = gitignorer
 
 	return nil
@@ -33,5 +26,13 @@ func (j *JamHubIgnorer) Match(filepath string) bool {
 		return true
 	}
 
-	return j.gitignorer.MatchesPath(filepath)
+	if j.gitignorer != nil && j.gitignorer.MatchesPath(filepath) {
+		return true
+	}
+
+	if j.jamignorer != nil && j.jamignorer.MatchesPath(filepath) {
+		return true
+	}
+
+	return false
 }

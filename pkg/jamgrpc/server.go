@@ -8,7 +8,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamenv"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
 	"github.com/zdgeier/jam/pkg/jamsite"
@@ -36,7 +36,7 @@ type JamHub struct {
 	oplocstorecommit     *oplocstorecommit.LocalOpLocStore
 	changestore          changestore.LocalChangeStore
 	mergestore           *mergestore.LocalStore
-	pb.UnimplementedJamHubServer
+	jampb.UnimplementedJamHubServer
 }
 
 func Hostname() string {
@@ -99,7 +99,7 @@ func New() (closer func(), err error) {
 
 	server := grpc.NewServer(opts...)
 	reflection.Register(server)
-	pb.RegisterJamHubServer(server, jamhub)
+	jampb.RegisterJamHubServer(server, jamhub)
 
 	address := "0.0.0.0:14357"
 	if jamenv.Env() == jamenv.Prod || jamenv.Env() == jamenv.Staging {
@@ -119,7 +119,7 @@ func New() (closer func(), err error) {
 	return func() { server.Stop() }, nil
 }
 
-func Connect(accessToken *oauth2.Token) (client pb.JamHubClient, closer func(), err error) {
+func Connect(accessToken *oauth2.Token) (client jampb.JamHubClient, closer func(), err error) {
 
 	md := metadata.New(map[string]string{"content-type": "application/grpc"})
 	perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(accessToken)}
@@ -149,7 +149,7 @@ func Connect(accessToken *oauth2.Token) (client pb.JamHubClient, closer func(), 
 	if err != nil {
 		log.Panicf("could not connect to jamhub server: %s", err)
 	}
-	client = pb.NewJamHubClient(conn)
+	client = jampb.NewJamHubClient(conn)
 	closer = func() {
 		if err := conn.Close(); err != nil {
 			log.Panic("could not close server connection")

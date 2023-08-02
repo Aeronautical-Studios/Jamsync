@@ -5,19 +5,19 @@ import (
 	"io"
 	"log"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/fastcdc"
 	"github.com/zeebo/xxh3"
 )
 
-func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
-	sig := make([]*pb.ChunkHash, 0)
+func DownloadCommittedFile(client jampb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
+	sig := make([]*jampb.ChunkHash, 0)
 	localChunker, err := fastcdc.NewJamChunker(localReader)
 	if err != nil {
 		return err
 	}
 
-	err = localChunker.CreateSignature(func(ch *pb.ChunkHash) error {
+	err = localChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
 		sig = append(sig, ch)
 		return nil
 	})
@@ -25,7 +25,7 @@ func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, project
 		return err
 	}
 
-	stream, err := client.ReadCommittedFile(context.TODO(), &pb.ReadCommittedFileRequest{
+	stream, err := client.ReadCommittedFile(context.TODO(), &jampb.ReadCommittedFileRequest{
 		ProjectId:     projectId,
 		OwnerUsername: ownerUsername,
 		CommitId:      commitId,
@@ -37,7 +37,7 @@ func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, project
 	}
 
 	numOps := 0
-	ops := make(chan *pb.Operation)
+	ops := make(chan *jampb.Operation)
 	go func() {
 		for {
 			in, err := stream.Recv()
@@ -63,14 +63,14 @@ func DownloadCommittedFile(client pb.JamHubClient, ownerUsername string, project
 	return err
 }
 
-func DownloadWorkspaceFile(client pb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
-	sig := make([]*pb.ChunkHash, 0)
+func DownloadWorkspaceFile(client jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
+	sig := make([]*jampb.ChunkHash, 0)
 	localChunker, err := fastcdc.NewJamChunker(localReader)
 	if err != nil {
 		return err
 	}
 
-	err = localChunker.CreateSignature(func(ch *pb.ChunkHash) error {
+	err = localChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
 		sig = append(sig, ch)
 		return nil
 	})
@@ -78,7 +78,7 @@ func DownloadWorkspaceFile(client pb.JamHubClient, ownerUsername string, project
 		return err
 	}
 
-	stream, err := client.ReadWorkspaceFile(context.TODO(), &pb.ReadWorkspaceFileRequest{
+	stream, err := client.ReadWorkspaceFile(context.TODO(), &jampb.ReadWorkspaceFileRequest{
 		ProjectId:     projectId,
 		OwnerUsername: ownerUsername,
 		WorkspaceId:   workspaceId,
@@ -90,7 +90,7 @@ func DownloadWorkspaceFile(client pb.JamHubClient, ownerUsername string, project
 		return err
 	}
 
-	ops := make(chan *pb.Operation)
+	ops := make(chan *jampb.Operation)
 	go func() {
 		for {
 			in, err := stream.Recv()

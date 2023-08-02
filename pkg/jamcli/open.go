@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/browser"
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamenv"
@@ -46,7 +46,7 @@ func Open() {
 		}
 	}
 
-	nameResp, err := apiClient.GetProjectName(context.Background(), &pb.GetProjectNameRequest{
+	nameResp, err := apiClient.GetProjectName(context.Background(), &jampb.GetProjectNameRequest{
 		OwnerUsername: state.OwnerUsername,
 		ProjectId:     state.ProjectId,
 	})
@@ -55,7 +55,7 @@ func Open() {
 	}
 
 	if state.WorkspaceInfo != nil {
-		workspaceNameResp, err := apiClient.GetWorkspaceName(context.Background(), &pb.GetWorkspaceNameRequest{
+		workspaceNameResp, err := apiClient.GetWorkspaceName(context.Background(), &jampb.GetWorkspaceNameRequest{
 			ProjectId:     state.ProjectId,
 			OwnerUsername: state.OwnerUsername,
 			WorkspaceId:   state.WorkspaceInfo.WorkspaceId,

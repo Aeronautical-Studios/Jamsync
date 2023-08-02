@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -44,7 +44,7 @@ func (s *LocalStore) fileDir(ownerId string, projectId, workspaceId uint64, path
 	return fmt.Sprintf("jamhubdata/%s/%d/opdataworkspace/%d/%02X", ownerId, projectId, workspaceId, pathHash[:1])
 }
 
-func (s *LocalStore) Read(ownerId string, projectId, workspaceId uint64, pathHash []byte, offset uint64, length uint64) (*pb.Operation, error) {
+func (s *LocalStore) Read(ownerId string, projectId, workspaceId uint64, pathHash []byte, offset uint64, length uint64) (*jampb.Operation, error) {
 	filePath := s.filePath(ownerId, projectId, workspaceId, pathHash)
 	var (
 		currFile *os.File
@@ -76,7 +76,7 @@ func (s *LocalStore) Read(ownerId string, projectId, workspaceId uint64, pathHas
 	}
 	s.mu.Unlock()
 
-	op := new(pb.Operation)
+	op := new(jampb.Operation)
 	err = proto.Unmarshal(b, op)
 	if err != nil {
 		log.Panic(err)
@@ -84,7 +84,7 @@ func (s *LocalStore) Read(ownerId string, projectId, workspaceId uint64, pathHas
 	return op, nil
 }
 
-func (s *LocalStore) Write(ownerId string, projectId, workspaceId uint64, pathHash []byte, op *pb.Operation) (offset uint64, length uint64, err error) {
+func (s *LocalStore) Write(ownerId string, projectId, workspaceId uint64, pathHash []byte, op *jampb.Operation) (offset uint64, length uint64, err error) {
 	err = os.MkdirAll(s.fileDir(ownerId, projectId, workspaceId, pathHash), os.ModePerm)
 	if err != nil {
 		log.Panic(err)

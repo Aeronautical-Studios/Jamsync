@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
@@ -33,7 +33,7 @@ func Pull() {
 	defer closer()
 
 	if state.CommitInfo == nil {
-		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &pb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
+		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &jampb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
 		if err != nil {
 			panic(err)
 		}
@@ -50,7 +50,7 @@ func Pull() {
 				log.Panic(err)
 			}
 			for key, val := range remoteToLocalDiff.GetDiffs() {
-				if val.Type != pb.FileMetadataDiff_NoOp {
+				if val.Type != jampb.FileMetadataDiff_NoOp {
 					fmt.Println("Pulled", key)
 				}
 			}
@@ -69,7 +69,7 @@ func Pull() {
 			panic(err)
 		}
 	} else {
-		commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &pb.GetProjectCurrentCommitRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId})
+		commitResp, err := apiClient.GetProjectCurrentCommit(context.Background(), &jampb.GetProjectCurrentCommitRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId})
 		if err != nil {
 			panic(err)
 		}
@@ -86,7 +86,7 @@ func Pull() {
 				log.Panic(err)
 			}
 			for key, val := range remoteToLocalDiff.GetDiffs() {
-				if val.Type != pb.FileMetadataDiff_NoOp {
+				if val.Type != jampb.FileMetadataDiff_NoOp {
 					fmt.Println("Pulled", key)
 				}
 			}

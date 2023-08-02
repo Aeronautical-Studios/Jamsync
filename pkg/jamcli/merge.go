@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
@@ -49,7 +49,7 @@ func Merge() {
 		return
 	}
 
-	resp, err := apiClient.MergeWorkspace(context.Background(), &pb.MergeWorkspaceRequest{
+	resp, err := apiClient.MergeWorkspace(context.Background(), &jampb.MergeWorkspaceRequest{
 		OwnerUsername: state.OwnerUsername,
 		ProjectId:     state.ProjectId,
 		WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
@@ -59,7 +59,7 @@ func Merge() {
 		return
 	}
 
-	_, err = apiClient.DeleteWorkspace(context.Background(), &pb.DeleteWorkspaceRequest{
+	_, err = apiClient.DeleteWorkspace(context.Background(), &jampb.DeleteWorkspaceRequest{
 		OwnerUsername: state.OwnerUsername,
 		ProjectId:     state.ProjectId,
 		WorkspaceId:   state.WorkspaceInfo.WorkspaceId,

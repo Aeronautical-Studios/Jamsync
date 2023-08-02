@@ -1,7 +1,7 @@
 syntax = "proto3";
-package pb;
+package jampb;
 
-option go_package = "github.com/zdgeier/jam/proto/pb";
+option go_package = "github.com/zdgeier/jam/proto/jampb";
 
 service JamHub {
     // Project operations
