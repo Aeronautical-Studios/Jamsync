@@ -7,6 +7,7 @@
 *.test
 *.out
 go.work
+go.work.sum
 .DS_Store
 
 # Custom
@@ -22,6 +23,10 @@ jamhub-build.zip
 .vscode
 gen/
 x509/
+certs/
+jamhub/
+jamhubweb.zip
+jamhubgrpc.zip
 
 **node_modules/
 //node_modules/

@@ -1,7 +1,7 @@
 syntax = "proto3";
 package pb;
 
-option go_package = "github.com/zdgeier/jamhub/proto/pb";
+option go_package = "github.com/zdgeier/jam/proto/pb";
 
 service JamHub {
     // Project operations
@@ -13,7 +13,6 @@ service JamHub {
     rpc GetProjectName(GetProjectNameRequest) returns (GetProjectNameResponse);
     rpc AddCollaborator(AddCollaboratorRequest) returns (AddCollaboratorResponse);
     rpc GetCollaborators(GetCollaboratorsRequest) returns (GetCollaboratorsResponse);
-    // rpc GetProjectConfig(GetProjectConfigRequest) returns (ProjectConfig);
 
     // Change operations
     rpc UpdateWorkspace(UpdateWorkspaceRequest) returns (UpdateWorkspaceResponse);
@@ -38,8 +37,12 @@ service JamHub {
     // User operations
     rpc UserInfo(UserInfoRequest) returns (UserInfoResponse);
     rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
-    rpc Ping(PingRequest) returns (PingResponse);
+    rpc CurrentUser(CurrentUserRequest) returns (CurrentUserResponse);
+    rpc Ping(PingRequest) returns (Pong);
 }
+
+message PingRequest {}
+message Pong {}
 
 message GetWorkspaceNameRequest {
     uint64 project_id = 1;
@@ -308,8 +311,8 @@ message BrowseProjectResponse {
     repeated string files = 2;
 }
 
-message PingRequest {}
-message PingResponse {
+message CurrentUserRequest {}
+message CurrentUserResponse {
     string username = 1;
 }
 

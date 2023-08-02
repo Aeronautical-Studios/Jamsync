@@ -5,7 +5,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"github.com/zdgeier/jamhub/internal/jam"
+	"github.com/zdgeier/jam/pkg/jamcli"
 )
 
 var (
@@ -18,34 +18,34 @@ func main() {
 
 	switch {
 	case len(os.Args) == 1:
-		jam.Help(version, built)
+		jamcli.Help(version, built)
 	case os.Args[1] == "login":
-		jam.Login()
+		jamcli.Login()
 	case os.Args[1] == "init":
-		jam.InitConfig()
+		jamcli.InitConfig()
 	case os.Args[1] == "open":
-		jam.Open()
+		jamcli.Open()
 	case os.Args[1] == "pull":
-		jam.Pull()
+		jamcli.Pull()
 	case os.Args[1] == "status":
-		jam.Status()
+		jamcli.Status()
 	case os.Args[1] == "push":
-		jam.Push()
+		jamcli.Push()
 	case os.Args[1] == "view":
-		jam.View()
+		jamcli.View()
 	case os.Args[1] == "merge":
-		jam.Merge()
+		jamcli.Merge()
 	case os.Args[1] == "update":
-		jam.Update()
+		jamcli.Update()
 	case os.Args[1] == "workon":
-		jam.WorkOn()
+		jamcli.WorkOn()
 	case os.Args[1] == "workspaces":
-		jam.ListWorkspaces()
+		jamcli.ListWorkspaces()
 	case os.Args[1] == "projects":
-		jam.ListProjects()
+		jamcli.ListProjects()
 	case os.Args[1] == "logout":
-		jam.Logout()
+		jamcli.Logout()
 	default:
-		jam.Help(version, built)
+		jamcli.Help(version, built)
 	}
 }
