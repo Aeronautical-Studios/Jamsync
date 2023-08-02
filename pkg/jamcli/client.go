@@ -88,8 +88,10 @@ func ReadLocalFileList() *pb.FileMetadata {
 			return nil
 		}
 		path = filepath.ToSlash(path)
-		if ignorer.Match(path) {
+		if ignorer.Match(path) && d.IsDir() {
 			return filepath.SkipDir
+		} else if ignorer.Match(path) {
+			return nil
 		}
 		numEntries += 1
 		i += 1
@@ -112,8 +114,10 @@ func ReadLocalFileList() *pb.FileMetadata {
 				return nil
 			}
 			path = filepath.ToSlash(path)
-			if ignorer.Match(path) {
+			if ignorer.Match(path) && d.IsDir() {
 				return filepath.SkipDir
+			} else if ignorer.Match(path) {
+				return nil
 			}
 			paths <- PathInfo{path, d.IsDir()}
 			i += 1
