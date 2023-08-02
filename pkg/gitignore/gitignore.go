@@ -53,6 +53,7 @@ The summarized version of the same has been copied here:
 package gitignore
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -73,6 +74,10 @@ type IgnoreParser interface {
 // This function pretty much attempts to mimic the parsing rules
 // listed above at the start of this file
 func getPatternFromLine(line string) (*regexp.Regexp, bool) {
+	// TODO (zdgeier): Handle this weird case from git .gitignore:
+	if line == "*+" {
+		return nil, false
+	}
 	// Trim OS-specific carriage returns.
 	line = strings.TrimRight(line, "\r")
 
@@ -145,6 +150,10 @@ func getPatternFromLine(line string) (*regexp.Regexp, bool) {
 	}
 	pattern, _ := regexp.Compile(expr)
 
+	if pattern.String() == "^(|.*/)([^/]*)+(|/.*)$" {
+		fmt.Println("dasjklfasda", line)
+	}
+
 	return pattern, negatePattern
 }
 
@@ -206,6 +215,8 @@ func (g GitIgnore) MatchesPath(f string) bool {
 	matchesPath := false
 	for idx, pattern := range g.patterns {
 		if pattern.MatchString(f) {
+			// fmt.Println("Matches", pattern.String(), f)
+			// fmt.Println("Matches", pattern, f)
 			// If this is a regular target (not negated with a gitignore exclude "!" etc)
 			if !g.negate[idx] {
 				matchesPath = true

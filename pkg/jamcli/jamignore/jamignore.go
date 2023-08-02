@@ -1,7 +1,6 @@
 package jamignore
 
 import (
-	"os"
 	"strings"
 
 	"github.com/zdgeier/jam/pkg/gitignore"
@@ -12,14 +11,15 @@ type JamHubIgnorer struct {
 }
 
 func (j *JamHubIgnorer) ImportPatterns(filepath string) error {
-	file, err := os.ReadFile(filepath)
-	if err != nil {
-		return nil
-	}
+	// file, err := os.ReadFile(filepath)
+	// if err != nil {
+	// 	return nil
+	// }
 
-	patterns := strings.Split(string(file), "\n")
+	// patterns := strings.Split(string(file), "\n")
 
-	gitignorer, err := gitignore.CompileIgnoreLines(patterns...)
+	// fmt.Println(patterns)
+	gitignorer, err := gitignore.CompileIgnoreFile(filepath) // gitignore.CompileIgnoreLines(patterns...)
 	if err != nil {
 		return err
 	}

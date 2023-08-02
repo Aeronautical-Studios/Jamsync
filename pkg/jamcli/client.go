@@ -77,10 +77,10 @@ func ReadLocalFileList() *pb.FileMetadata {
 	if err != nil {
 		panic(err)
 	}
-	err = ignorer.ImportPatterns(".jamignore")
-	if err != nil {
-		panic(err)
-	}
+	// err = ignorer.ImportPatterns(".jamignore")
+	// if err != nil {
+	// 	panic(err)
+	// }
 	var numEntries int64
 	i := 0
 	if err := filepath.WalkDir(".", func(path string, d fs.DirEntry, _ error) error {
@@ -88,9 +88,8 @@ func ReadLocalFileList() *pb.FileMetadata {
 			return nil
 		}
 		path = filepath.ToSlash(path)
-		if ignorer.Match(path) && d.IsDir() {
-			return filepath.SkipDir
-		} else if ignorer.Match(path) {
+		if ignorer.Match(path) {
+			// fmt.Println("Ignoring", path)
 			return nil
 		}
 		numEntries += 1
@@ -114,9 +113,8 @@ func ReadLocalFileList() *pb.FileMetadata {
 				return nil
 			}
 			path = filepath.ToSlash(path)
-			if ignorer.Match(path) && d.IsDir() {
-				return filepath.SkipDir
-			} else if ignorer.Match(path) {
+			if ignorer.Match(path) {
+				// fmt.Println("Ignoring2", path)
 				return nil
 			}
 			paths <- PathInfo{path, d.IsDir()}
