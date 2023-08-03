@@ -9,7 +9,6 @@ import (
 )
 
 func Help(version string, built string) {
-	panic("HELP")
 	fmt.Println()
 	fmt.Println("Welcome to Jam!")
 	fmt.Println("\nversion:  ", version)

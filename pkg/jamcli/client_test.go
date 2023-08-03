@@ -10,7 +10,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
-	jampb "github.com/zdgeier/jam/gen/pb"
+	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamenv"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
 	"github.com/zdgeier/jam/pkg/jamstores/file"

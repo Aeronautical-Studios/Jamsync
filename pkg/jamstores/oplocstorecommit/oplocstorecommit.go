@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -85,7 +84,7 @@ func (s *LocalOpLocStore) MaxCommitId(ownerId string, projectId uint64) (uint64,
 		return 0, err
 	}
 
-	files, err := ioutil.ReadDir(fmt.Sprintf("jamhubdata/%s/%d/oplocstorecommit/", ownerId, projectId))
+	files, err := os.ReadDir(fmt.Sprintf("jamhubdata/%s/%d/oplocstorecommit/", ownerId, projectId))
 	if err != nil {
 		log.Panic(err)
 	}
@@ -138,13 +137,13 @@ func (s *LocalOpLocStore) GetChangedPathHashes(ownerId string, projectId uint64,
 	pathHashes := make(map[string]interface{}, 0)
 	for i := startCommitId; i <= endCommitId; i-- {
 		commitLocsDir := fmt.Sprintf("jamhubdata/%s/%d/oplocstorecommit/%d", ownerId, projectId, startCommitId)
-		dirs, err := ioutil.ReadDir(commitLocsDir)
+		dirs, err := os.ReadDir(commitLocsDir)
 		if err != nil {
 			return nil, err
 		}
 
 		for _, dir := range dirs {
-			files, err := ioutil.ReadDir(filepath.Join(commitLocsDir, dir.Name()))
+			files, err := os.ReadDir(filepath.Join(commitLocsDir, dir.Name()))
 			if err != nil {
 				return nil, err
 			}

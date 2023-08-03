@@ -3,7 +3,6 @@ package opdatastoreworkspace
 import (
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -121,14 +120,14 @@ func (s *LocalStore) Write(ownerId string, projectId, workspaceId uint64, pathHa
 
 func (s *LocalStore) GetChangedPathHashes(ownerId string, projectId uint64, workspaceId uint64) (map[string]interface{}, error) {
 	projectDataDir := fmt.Sprintf("jamhubdata/%s/%d/opdataworkspace/%d", ownerId, projectId, workspaceId)
-	dirs, err := ioutil.ReadDir(projectDataDir)
+	dirs, err := os.ReadDir(projectDataDir)
 	if err != nil {
 		return nil, err
 	}
 
 	pathHashes := make(map[string]interface{}, 0)
 	for _, dir := range dirs {
-		files, err := ioutil.ReadDir(filepath.Join(projectDataDir, dir.Name()))
+		files, err := os.ReadDir(filepath.Join(projectDataDir, dir.Name()))
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +149,7 @@ func (s *LocalStore) DeleteProject(ownerId string, projectId uint64) error {
 }
 
 func (s *LocalStore) DeleteWorkspace(ownerId string, projectId uint64, workspaceId uint64) error {
-	dirs, err := ioutil.ReadDir(fmt.Sprintf("jamhubdata/%s/%d/opdataworkspace/%d", ownerId, projectId, workspaceId))
+	dirs, err := os.ReadDir(fmt.Sprintf("jamhubdata/%s/%d/opdataworkspace/%d", ownerId, projectId, workspaceId))
 	if err != nil {
 		return err
 	}

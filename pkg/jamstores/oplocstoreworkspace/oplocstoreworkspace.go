@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -127,7 +126,7 @@ func (s *LocalOpLocStore) MaxChangeId(ownerId string, projectId, workspaceId uin
 		return 0, nil
 	}
 
-	files, err := ioutil.ReadDir(fmt.Sprintf("jamhubdata/%s/%d/oplocstoreworkspace/%d", ownerId, projectId, workspaceId))
+	files, err := os.ReadDir(fmt.Sprintf("jamhubdata/%s/%d/oplocstoreworkspace/%d", ownerId, projectId, workspaceId))
 	if err != nil {
 		log.Panic(err)
 	}
@@ -150,7 +149,7 @@ func (s *LocalOpLocStore) DeleteProject(ownerId string, projectId uint64) error 
 }
 
 func (s *LocalOpLocStore) DeleteWorkspace(ownerId string, projectId uint64, workspaceId uint64) error {
-	dirs, err := ioutil.ReadDir(fmt.Sprintf("jamhubdata/%s/%d/oplocstoreworkspace/%d", ownerId, projectId, workspaceId))
+	dirs, err := os.ReadDir(fmt.Sprintf("jamhubdata/%s/%d/oplocstoreworkspace/%d", ownerId, projectId, workspaceId))
 	if err != nil {
 		return err
 	}

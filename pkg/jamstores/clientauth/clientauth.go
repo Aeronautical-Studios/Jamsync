@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -203,7 +202,7 @@ func getAccessToken(clientID string, codeVerifier string, authorizationCode stri
 
 	defer res.Body.Close()
 	var responseData map[string]interface{}
-	body, _ := ioutil.ReadAll(res.Body)
+	body, _ := io.ReadAll(res.Body)
 
 	err = json.Unmarshal(body, &responseData)
 	if err != nil {
