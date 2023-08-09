@@ -6,7 +6,6 @@ import (
 
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
-	"github.com/zdgeier/jam/pkg/jamstores/db"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -53,18 +52,8 @@ func (s JamHub) AddProject(ctx context.Context, in *jampb.AddProjectRequest) (*j
 	}
 
 	projectId, err := s.db.AddProject(in.GetProjectName(), username)
-	if errors.Is(err, db.ProjectAlreadyExists) {
-		return nil, status.Error(codes.AlreadyExists, db.ProjectAlreadyExists.Error())
-	}
-
-	err = s.opdatastorecommit.AddProject(username, projectId)
 	if err != nil {
-		return nil, err
-	}
-
-	err = s.oplocstorecommit.AddProject(username, projectId)
-	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.AlreadyExists, "project name already exists")
 	}
 
 	return &jampb.AddProjectResponse{
@@ -184,24 +173,6 @@ func (s JamHub) ProjectIdOwner(owner string, projectId uint64) (bool, error) {
 	return false, nil
 }
 
-// func (s JamHub) ProjectOwner(ownerUsername string, projectName string) (bool, error) {
-// 	projectId, err := s.db.GetProjectId(projectName, ownerUsername)
-// 	if err != nil {
-// 		return false, err
-// 	}
-
-// 	projectOwnerUsername, err := s.db.GetProjectOwnerUsername(projectId)
-// 	if err != nil {
-// 		return false, err
-// 	}
-
-// 	if ownerUsername == projectOwnerUsername {
-// 		return true, nil
-// 	}
-
-// 	return false, nil
-// }
-
 func (s JamHub) ProjectIdAccessible(ownerUsername string, projectId uint64, currentUsername string) (bool, error) {
 	projectOwnerUsername, err := s.db.GetProjectOwnerUsername(projectId)
 	if err != nil {
@@ -269,48 +240,4 @@ func (s JamHub) GetProjectId(ctx context.Context, in *jampb.GetProjectIdRequest)
 	}
 
 	return &jampb.GetProjectIdResponse{ProjectId: projectId}, nil
-}
-
-func (s JamHub) DeleteProject(ctx context.Context, in *jampb.DeleteProjectRequest) (*jampb.DeleteProjectResponse, error) {
-	id, err := serverauth.ParseIdFromCtx(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	projectName := in.GetProjectName()
-	if in.GetProjectId() != 0 {
-		projectName, err = s.db.GetProjectName(in.GetProjectId(), id)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	projectId, err := s.db.DeleteProject(projectName, id)
-	if err != nil {
-		return nil, err
-	}
-	err = s.changestore.DeleteProject(projectId, id)
-	if err != nil {
-		return nil, err
-	}
-	err = s.oplocstoreworkspace.DeleteProject(id, projectId)
-	if err != nil {
-		return nil, err
-	}
-	err = s.oplocstorecommit.DeleteProject(id, projectId)
-	if err != nil {
-		return nil, err
-	}
-	err = s.opdatastoreworkspace.DeleteProject(id, projectId)
-	if err != nil {
-		return nil, err
-	}
-	err = s.opdatastorecommit.DeleteProject(id, projectId)
-	if err != nil {
-		return nil, err
-	}
-	return &jampb.DeleteProjectResponse{
-		ProjectId:   projectId,
-		ProjectName: projectName,
-	}, nil
 }

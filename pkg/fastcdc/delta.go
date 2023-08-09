@@ -10,8 +10,24 @@ import (
 
 type OpType byte
 
-type ChunkHashWriter func(ch *jampb.ChunkHash) error
-type OperationWriter func(op *jampb.Operation) error
+type ChunkHashWriter func(chunkHash *jampb.ChunkHash) error
+type ChunkWriter func(chunk *jampb.Chunk) error
+
+func (c *Chunker) CreateHashSignature() (map[uint64][]byte, error) {
+	hashes := make(map[uint64][]byte)
+	for {
+		chunk, err := c.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		hashes[chunk.Hash] = nil
+	}
+	return hashes, nil
+}
 
 func (c *Chunker) CreateSignature(sw ChunkHashWriter) error {
 	for {
@@ -32,17 +48,17 @@ func (c *Chunker) CreateSignature(sw ChunkHashWriter) error {
 	return nil
 }
 
-func (c *Chunker) ApplyDelta(alignedTarget io.Writer, target io.ReadSeeker, ops chan *jampb.Operation) error {
+func (c *Chunker) ApplyDelta(alignedTarget io.Writer, target io.ReadSeeker, chunks chan *jampb.Chunk) error {
 	var err error
 	var n int
 	var block []byte
 
-	writeBlock := func(op *jampb.Operation) error {
-		_, err := target.Seek(int64(op.ChunkHash.Offset), 0)
+	writeBlock := func(chunk *jampb.Chunk) error {
+		_, err := target.Seek(int64(chunk.Offset), 0)
 		if err != nil {
 			return err
 		}
-		buffer := make([]byte, int(op.ChunkHash.Length)) // TODO: reuse this buffer
+		buffer := make([]byte, int(chunk.Length)) // TODO: reuse this buffer
 		n, err = target.Read(buffer)
 		if err != nil {
 			if err != io.ErrUnexpectedEOF {
@@ -57,18 +73,17 @@ func (c *Chunker) ApplyDelta(alignedTarget io.Writer, target io.ReadSeeker, ops 
 		return nil
 	}
 
-	for op := range ops {
-		switch op.Type {
-		case jampb.Operation_OpBlock:
-			err = writeBlock(op)
+	for chunk := range chunks {
+		if chunk.Data == nil {
+			err = writeBlock(chunk)
 			if err != nil {
 				if err == io.EOF {
 					break
 				}
 				return err
 			}
-		case jampb.Operation_OpData:
-			_, err = alignedTarget.Write(op.Chunk.Data)
+		} else {
+			_, err = alignedTarget.Write(chunk.Data)
 			if err != nil {
 				return err
 			}
@@ -78,8 +93,8 @@ func (c *Chunker) ApplyDelta(alignedTarget io.Writer, target io.ReadSeeker, ops 
 }
 
 // Writes delta ops that are diffs from chunkhashes
-func (c *Chunker) CreateDelta(chunkHashes []*jampb.ChunkHash, ops OperationWriter) error {
-	for i := 0; ; i++ {
+func (c *Chunker) CreateDelta(hashes map[uint64][]byte, chunks ChunkWriter) error {
+	for {
 		chunk, err := c.Next()
 		if err == io.EOF {
 			break
@@ -87,27 +102,20 @@ func (c *Chunker) CreateDelta(chunkHashes []*jampb.ChunkHash, ops OperationWrite
 		if err != nil {
 			return err
 		}
-
-		// Has valid chunk hash to compare against
-		if i < len(chunkHashes) {
-			chunkHash := chunkHashes[i]
-			if chunkHash.Hash == chunk.Hash && chunkHash.Length == chunk.Length && chunkHash.Offset == chunk.Offset {
-				ops(&jampb.Operation{
-					Type:      jampb.Operation_OpBlock,
-					ChunkHash: chunkHash,
-				})
-			} else {
-				ops(&jampb.Operation{
-					Type:  jampb.Operation_OpData,
-					Chunk: chunk,
-				})
+		if _, ok := hashes[chunk.Hash]; ok {
+			err := chunks(&jampb.Chunk{
+				Hash:   chunk.Hash,
+				Offset: chunk.Offset,
+				Length: chunk.Length,
+			})
+			if err != nil {
+				return err
 			}
 		} else {
-			ops(&jampb.Operation{
-				Type:  jampb.Operation_OpData,
-				Chunk: chunk,
-			})
-
+			err := chunks(chunk)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

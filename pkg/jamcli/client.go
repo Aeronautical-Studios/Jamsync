@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/schollz/progressbar/v3"
 	"github.com/zdgeier/jam/gen/jampb"
@@ -77,10 +78,6 @@ func ReadLocalFileList() *jampb.FileMetadata {
 	if err != nil {
 		panic(err)
 	}
-	// err = ignorer.ImportPatterns(".jamignore")
-	// if err != nil {
-	// 	panic(err)
-	// }
 	var numEntries int64
 	i := 0
 	if err := filepath.WalkDir(".", func(path string, d fs.DirEntry, _ error) error {
@@ -89,7 +86,6 @@ func ReadLocalFileList() *jampb.FileMetadata {
 		}
 		path = filepath.ToSlash(path)
 		if ignorer.Match(path) {
-			// fmt.Println("Ignoring", path)
 			return nil
 		}
 		numEntries += 1
@@ -114,7 +110,6 @@ func ReadLocalFileList() *jampb.FileMetadata {
 			}
 			path = filepath.ToSlash(path)
 			if ignorer.Match(path) {
-				// fmt.Println("Ignoring2", path)
 				return nil
 			}
 			paths <- PathInfo{path, d.IsDir()}
@@ -139,119 +134,15 @@ func ReadLocalFileList() *jampb.FileMetadata {
 	}
 }
 
-func uploadWorkspaceFiles(ctx context.Context, apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, paths <-chan string, results chan<- error, numFiles int64, w io.Writer) {
-	type pathResponse struct {
-		chunkHashResponse *jampb.ReadWorkspaceChunkHashesResponse
-		path              string
-	}
-	chunkHashResponses := make(chan pathResponse, numFiles)
+func uploadWorkspaceFile(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, filePath string, sourceReader io.Reader, token []byte, writeStream jampb.JamHub_WriteWorkspaceOperationsStreamClient) error {
+	ctx := context.Background()
 
-	numUpload := 256
-	numUploadFinished := make(chan bool)
-	for i := 0; i < numUpload; i++ {
-		go func() {
-			writeStream, err := apiClient.WriteWorkspaceOperationsStream(ctx)
-			if err != nil {
-				log.Panic(err)
-			}
-			for resp := range chunkHashResponses {
-				file, err := os.OpenFile(resp.path, os.O_RDONLY, 0755)
-				if err != nil {
-					results <- nil
-				}
-				sourceChunker, err := fastcdc.NewJamChunker(file)
-				if err != nil {
-					results <- nil
-				}
-
-				opsOut := make(chan *jampb.Operation)
-				go func() {
-					defer close(opsOut)
-					err := sourceChunker.CreateDelta(resp.chunkHashResponse.GetChunkHashes(), func(op *jampb.Operation) error {
-						switch op.Type {
-						case jampb.Operation_OpData:
-							b := make([]byte, len(op.Chunk.Data))
-							copy(b, op.Chunk.Data)
-							op.Chunk.Data = b
-							io.Copy(w, bytes.NewReader(op.Chunk.Data))
-						}
-						opsOut <- op
-						return nil
-					})
-					if err != nil {
-						log.Panic(err)
-					}
-				}()
-				sent := 0
-				for op := range opsOut {
-					err = writeStream.Send(&jampb.WorkspaceFileOperation{
-						OwnerUsername: ownerUsername,
-						ProjectId:     projectId,
-						WorkspaceId:   workspaceId,
-						ChangeId:      changeId,
-						PathHash:      pathToHash(resp.path),
-						Op:            op,
-					})
-					if err != nil {
-						log.Panic(err)
-					}
-					sent += 1
-				}
-				results <- file.Close()
-			}
-			_, err = writeStream.CloseAndRecv()
-			if err != nil {
-				log.Panic(err)
-			}
-
-			numUploadFinished <- true
-		}()
-	}
-
-	done := make(chan bool, 1)
-	go func() {
-		for i := 0; i < numUpload; i++ {
-			<-numUploadFinished
-		}
-		close(results)
-		done <- true
-	}()
-
-	numHashDownload := 64
-	numHashDownloadFinished := make(chan bool)
-	for i := 0; i < numHashDownload; i++ {
-		go func() {
-			for path := range paths {
-				chunkHashResp, err := apiClient.ReadWorkspaceChunkHashes(ctx, &jampb.ReadWorkspaceChunkHashesRequest{
-					OwnerUsername: ownerUsername,
-					ProjectId:     projectId,
-					WorkspaceId:   workspaceId,
-					ChangeId:      changeId,
-					PathHash:      pathToHash(path),
-				})
-				if err != nil {
-					results <- err
-					return
-				}
-				chunkHashResponses <- pathResponse{chunkHashResp, path}
-			}
-			numHashDownloadFinished <- true
-		}()
-	}
-	for i := 0; i < numHashDownload; i++ {
-		<-numHashDownloadFinished
-	}
-	close(chunkHashResponses)
-	<-done
-}
-
-func uploadWorkspaceFile(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, filePath string, sourceReader io.Reader) error {
-	chunkHashesResp, err := apiClient.ReadWorkspaceChunkHashes(context.TODO(), &jampb.ReadWorkspaceChunkHashesRequest{
+	client, err := apiClient.ReadWorkspaceFileHashes(ctx, &jampb.ReadWorkspaceFileHashesRequest{
 		OwnerUsername: ownerUsername,
 		ProjectId:     projectId,
 		WorkspaceId:   workspaceId,
-		ChangeId:      changeId - 1,
-		PathHash:      pathToHash(filePath),
+		ChangeId:      changeId,
+		PathHashes:    [][]byte{pathToHash(filePath)},
 	})
 	if err != nil {
 		return err
@@ -262,50 +153,26 @@ func uploadWorkspaceFile(apiClient jampb.JamHubClient, ownerUsername string, pro
 		return err
 	}
 
-	opsOut := make(chan *jampb.Operation)
-	tot := 0
-	go func() {
-		var blockCt, dataCt, bytes int
-		defer close(opsOut)
-		err := sourceChunker.CreateDelta(chunkHashesResp.GetChunkHashes(), func(op *jampb.Operation) error {
-			tot += int(op.Chunk.GetLength()) + int(op.ChunkHash.GetLength())
-			switch op.Type {
-			case jampb.Operation_OpBlock:
-				blockCt++
-			case jampb.Operation_OpData:
-				b := make([]byte, len(op.Chunk.Data))
-				copy(b, op.Chunk.Data)
-				op.Chunk.Data = b
-				dataCt++
-				bytes += len(op.Chunk.Data)
-			}
-			opsOut <- op
-			return nil
-		})
-		if err != nil {
-			panic(err)
-		}
-	}()
-
-	writeStream, err := apiClient.WriteWorkspaceOperationsStream(context.TODO())
+	msg, err := client.Recv()
 	if err != nil {
 		return err
 	}
-	for op := range opsOut {
-		err = writeStream.Send(&jampb.WorkspaceFileOperation{
-			OwnerUsername: ownerUsername,
-			ProjectId:     projectId,
-			WorkspaceId:   workspaceId,
-			ChangeId:      changeId,
-			PathHash:      pathToHash(filePath),
-			Op:            op,
+
+	err = sourceChunker.CreateDelta(msg.Hashes, func(chunk *jampb.Chunk) error {
+		err = writeStream.Send(&jampb.FileWriteOperation{
+			PathHash:       pathToHash(filePath),
+			Chunk:          chunk,
+			OperationToken: token,
 		})
 		if err != nil {
 			log.Panic(err)
 		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
 	}
 
-	_, err = writeStream.CloseAndRecv()
 	return err
 }
 
@@ -314,15 +181,14 @@ func pathToHash(path string) []byte {
 	return h[:]
 }
 
-func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, fileMetadata *jampb.FileMetadata, fileMetadataDiff *jampb.FileMetadataDiff) error {
+func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, currChangeId uint64, fileMetadata *jampb.FileMetadata, fileMetadataDiff *jampb.FileMetadataDiff) error {
 	ctx := context.Background()
 
-	var numFiles int64
-	var totalSize int64
+	numFiles := 0
+	totalSize := int64(0)
 	for path, diff := range fileMetadataDiff.GetDiffs() {
 		if diff.GetType() != jampb.FileMetadataDiff_NoOp && diff.GetType() != jampb.FileMetadataDiff_Delete && !diff.GetFile().GetDir() {
 			numFiles += 1
-
 			s, err := os.Stat(path)
 			if err != nil {
 				panic(err)
@@ -331,309 +197,146 @@ func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername strin
 		}
 	}
 
-	paths := make(chan string, numFiles)
+	tokenResp, err := apiClient.GetOperationStreamToken(ctx, &jampb.GetOperationStreamTokenRequest{
+		OwnerUsername: ownerUsername,
+		ProjectId:     projectId,
+		WorkspaceId:   workspaceId,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	type jobData struct {
+		pathHash []byte
+		hashes   map[uint64][]byte
+	}
+
+	pathHashToPath := make(map[string]string)
+
+	bar := progressbar.DefaultBytes(int64(totalSize), "Uploading")
+	var wg sync.WaitGroup
+	worker := func(jobs <-chan jobData, results chan<- error) {
+		defer wg.Done()
+
+		writeStream, err := apiClient.WriteWorkspaceOperationsStream(ctx)
+		if err != nil {
+			panic(err)
+		}
+		for job := range jobs {
+			path := pathHashToPath[string(job.pathHash)]
+			file, err := os.OpenFile(path, os.O_RDONLY, 0755)
+			if err != nil {
+				panic(err)
+			}
+
+			sourceChunker, err := fastcdc.NewJamChunker(file)
+			if err != nil {
+				panic(err)
+			}
+
+			err = sourceChunker.CreateDelta(job.hashes, func(chunk *jampb.Chunk) error {
+				err := writeStream.Send(&jampb.FileWriteOperation{
+					PathHash:       pathToHash(path),
+					Chunk:          chunk,
+					OperationToken: tokenResp.GetToken(),
+				})
+				bar.Write(chunk.Data)
+				return err
+			})
+			if err != nil {
+				fmt.Println(err)
+				panic(err)
+			}
+
+			err = file.Close()
+			if err != nil {
+				panic(err)
+			}
+
+			results <- nil
+		}
+		_, err = writeStream.CloseAndRecv()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	jobs := make(chan jobData, numFiles)
 	results := make(chan error, numFiles)
+	for w := 1; w < 64 && w <= int(numFiles)/10+1; w++ {
+		wg.Add(1)
+		go worker(jobs, results)
+	}
 
-	bar := progressbar.DefaultBytes(
-		totalSize,
-		fmt.Sprintf("Syncing %d files", numFiles),
-	)
-	go uploadWorkspaceFiles(ctx, apiClient, ownerUsername, projectId, workspaceId, changeId, paths, results, numFiles, bar)
-
+	pathHashes := make([][]byte, 0, numFiles)
 	for path, diff := range fileMetadataDiff.GetDiffs() {
 		if diff.GetType() != jampb.FileMetadataDiff_NoOp && diff.GetType() != jampb.FileMetadataDiff_Delete && !diff.GetFile().GetDir() {
-			paths <- path
+			pathHashes = append(pathHashes, pathToHash(path))
+			pathHashToPath[string(pathToHash(path))] = path
 		}
 	}
-	close(paths)
 
-	for res := range results {
-		if res != nil {
-			log.Panic(res)
-		}
-		bar.Add(1)
+	client, err := apiClient.ReadWorkspaceFileHashes(ctx, &jampb.ReadWorkspaceFileHashesRequest{
+		OwnerUsername: ownerUsername,
+		ProjectId:     projectId,
+		WorkspaceId:   workspaceId,
+		ChangeId:      currChangeId,
+		PathHashes:    pathHashes,
+	})
+	if err != nil {
+		panic(err)
 	}
-	fmt.Println()
+
+	go func() {
+		for {
+			recv, err := client.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+
+				panic(err)
+			}
+			jobs <- jobData{
+				pathHash: recv.PathHash,
+				hashes:   recv.Hashes,
+			}
+		}
+		close(jobs)
+	}()
+
+	for a := 1; a <= numFiles; a++ {
+		err := <-results
+		if err != nil {
+			return err
+		}
+	}
+	bar.Finish()
 
 	metadataBytes, err := proto.Marshal(fileMetadata)
 	if err != nil {
 		return err
 	}
-	err = uploadWorkspaceFile(apiClient, ownerUsername, projectId, workspaceId, changeId, ".jamfilelist", bytes.NewReader(metadataBytes))
+	writeStream, err := apiClient.WriteWorkspaceOperationsStream(ctx)
+	if err != nil {
+		panic(err)
+	}
+	err = uploadWorkspaceFile(apiClient, ownerUsername, projectId, workspaceId, tokenResp.NewChangeId, ".jamfilelist", bytes.NewReader(metadataBytes), tokenResp.GetToken(), writeStream)
+	if err != nil {
+		return err
+	}
+	_, err = writeStream.CloseAndRecv()
 	if err != nil {
 		return err
 	}
 
-	return err
-}
+	fmt.Println("Uploading file list...")
+	wg.Wait()
 
-func downloadWorkspaceFiles(ctx context.Context, apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, paths <-chan string, results chan<- error, numFiles int64) {
-	numUpload := 64
-	numUploadFinished := make(chan bool)
-	for i := 0; i < numUpload; i++ {
-		go func() {
-			for path := range paths {
-				currFile, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0755)
-				if err != nil {
-					fmt.Println(err)
-					results <- nil
-					continue
-				}
-
-				targetChunker, err := fastcdc.NewJamChunker(currFile)
-				if err != nil {
-					results <- err
-					continue
-				}
-
-				sig := make([]*jampb.ChunkHash, 0)
-				err = targetChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
-					sig = append(sig, ch)
-					return nil
-				})
-				if err != nil {
-					results <- err
-					continue
-				}
-
-				readFileClient, err := apiClient.ReadWorkspaceFile(ctx, &jampb.ReadWorkspaceFileRequest{
-					OwnerUsername: ownerUsername,
-					ProjectId:     projectId,
-					WorkspaceId:   workspaceId,
-					ChangeId:      changeId,
-					PathHash:      pathToHash(path),
-					ChunkHashes:   sig,
-				})
-				if err != nil {
-					results <- err
-					continue
-				}
-				numOps := 0
-				ops := make(chan *jampb.Operation)
-				go func() {
-					for {
-						in, err := readFileClient.Recv()
-						if err == io.EOF {
-							break
-						}
-						if err != nil {
-							log.Println(err)
-							return
-						}
-						ops <- in.Op
-						numOps += 1
-					}
-					close(ops)
-				}()
-				tempFilePath := path + ".jamtemp"
-				tempFile, err := os.OpenFile(tempFilePath, os.O_WRONLY|os.O_CREATE, 0755)
-				if err != nil {
-					results <- err
-					continue
-				}
-
-				currFile.Seek(0, 0)
-				err = targetChunker.ApplyDelta(tempFile, currFile, ops)
-				if err != nil {
-					results <- err
-					continue
-				}
-				err = currFile.Close()
-				if err != nil {
-					results <- err
-					continue
-				}
-				err = tempFile.Close()
-				if err != nil {
-					results <- err
-					continue
-				}
-
-				err = os.Rename(tempFilePath, path)
-				if err != nil {
-					fmt.Println(err)
-				}
-
-				results <- nil
-			}
-			numUploadFinished <- true
-		}()
-	}
-
-	done := make(chan bool, 1)
-	go func() {
-		for i := 0; i < numUpload; i++ {
-			<-numUploadFinished
-		}
-		close(results)
-		done <- true
-	}()
-	<-done
-}
-
-func downloadCommittedFiles(ctx context.Context, apiClient jampb.JamHubClient, ownerUsername string, projectId, commitId uint64, paths <-chan string, results chan<- error, numFiles int64) {
-	numUpload := 100
-	numUploadFinished := make(chan bool)
-	for i := 0; i < numUpload; i++ {
-		go func() {
-			for path := range paths {
-				currFile, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0755)
-				if err != nil {
-					fmt.Println(err)
-					results <- nil
-					continue
-				}
-
-				targetChunker, err := fastcdc.NewJamChunker(currFile)
-				if err != nil {
-					results <- err
-					continue
-				}
-
-				sig := make([]*jampb.ChunkHash, 0)
-				err = targetChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
-					sig = append(sig, ch)
-					return nil
-				})
-				if err != nil {
-					results <- err
-					continue
-				}
-
-				readFileClient, err := apiClient.ReadCommittedFile(ctx, &jampb.ReadCommittedFileRequest{
-					ProjectId:     projectId,
-					OwnerUsername: ownerUsername,
-					CommitId:      commitId,
-					PathHash:      pathToHash(path),
-					ChunkHashes:   sig,
-				})
-				if err != nil {
-					results <- err
-					continue
-				}
-				numOps := 0
-				ops := make(chan *jampb.Operation)
-				go func() {
-					for {
-						in, err := readFileClient.Recv()
-						if err == io.EOF {
-							break
-						}
-						if err != nil {
-							log.Println(err)
-							return
-						}
-						ops <- in.Op
-						numOps += 1
-					}
-					close(ops)
-				}()
-				tempFilePath := path + ".jamtemp"
-				tempFile, err := os.OpenFile(tempFilePath, os.O_WRONLY|os.O_CREATE, 0755)
-				if err != nil {
-					results <- err
-					continue
-				}
-
-				currFile.Seek(0, 0)
-				err = targetChunker.ApplyDelta(tempFile, currFile, ops)
-				if err != nil {
-					results <- err
-					continue
-				}
-				err = currFile.Close()
-				if err != nil {
-					results <- err
-					continue
-				}
-				err = tempFile.Close()
-				if err != nil {
-					results <- err
-					continue
-				}
-
-				err = os.Rename(tempFilePath, path)
-				if err != nil {
-					fmt.Println(err)
-				}
-
-				results <- nil
-			}
-			numUploadFinished <- true
-		}()
-	}
-
-	done := make(chan bool, 1)
-	go func() {
-		for i := 0; i < numUpload; i++ {
-			<-numUploadFinished
-		}
-		close(results)
-		done <- true
-	}()
-	<-done
-}
-
-func ApplyFileListDiffCommit(apiClient jampb.JamHubClient, ownerId string, projectId, commitId uint64, fileMetadataDiff *jampb.FileMetadataDiff) error {
-	ctx := context.Background()
-	for path, diff := range fileMetadataDiff.GetDiffs() {
-		if diff.GetType() != jampb.FileMetadataDiff_NoOp && diff.GetFile().GetDir() {
-			err := os.MkdirAll(path, os.ModePerm)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	var numFiles int64
-	for _, diff := range fileMetadataDiff.GetDiffs() {
-		if diff.GetType() != jampb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
-			numFiles += 1
-		}
-	}
-
-	if numFiles == 0 {
-		return nil
-	}
-
-	paths := make(chan string, numFiles)
-	results := make(chan error, numFiles)
-
-	go downloadCommittedFiles(ctx, apiClient, ownerId, projectId, commitId, paths, results, numFiles)
-
-	for path, diff := range fileMetadataDiff.GetDiffs() {
-		if diff.GetType() != jampb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
-			if diff.GetType() == jampb.FileMetadataDiff_Delete {
-				err := os.Remove(path)
-				if err != nil {
-					return err
-				}
-			} else {
-				paths <- path
-			}
-		}
-	}
-	close(paths)
-
-	if numFiles > 1000 {
-		fmt.Println("Syncing files")
-		bar := progressbar.Default(numFiles)
-		for res := range results {
-			if res != nil {
-				fmt.Println(res) // Probably should handle this better
-			}
-			bar.Add(1)
-		}
-	} else {
-		for res := range results {
-			if res != nil {
-				fmt.Println(res) // Probably should handle this better
-			}
-		}
-	}
 	return nil
 }
 
-func ApplyFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerId string, projectId uint64, workspaceId uint64, changeId uint64, fileMetadataDiff *jampb.FileMetadataDiff) error {
+func ApplyFileListDiffCommit(apiClient jampb.JamHubClient, ownerUsername string, projectId, commitId uint64, fileMetadataDiff *jampb.FileMetadataDiff) error {
 	ctx := context.Background()
 	for path, diff := range fileMetadataDiff.GetDiffs() {
 		if diff.GetType() != jampb.FileMetadataDiff_NoOp && diff.GetFile().GetDir() {
@@ -654,10 +357,132 @@ func ApplyFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerId string, pr
 		return nil
 	}
 
-	paths := make(chan string, numFiles)
+	worker := func(jobs <-chan string, results chan<- error) {
+		for path := range jobs {
+			currFile, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0755)
+			if err != nil {
+				panic(err)
+			}
+
+			targetChunker, err := fastcdc.NewJamChunker(currFile)
+			if err != nil {
+				panic(err)
+			}
+
+			localChunkHashes, err := targetChunker.CreateHashSignature()
+			if err != nil {
+				panic(err)
+			}
+
+			readFileClient, err := apiClient.ReadCommittedFile(ctx, &jampb.ReadCommittedFileRequest{
+				ProjectId:        projectId,
+				OwnerUsername:    ownerUsername,
+				CommitId:         commitId,
+				PathHash:         pathToHash(path),
+				LocalChunkHashes: localChunkHashes,
+			})
+			if err != nil {
+				panic(err)
+			}
+			tempFilePath := path + ".jamtemp"
+			tempFile, err := os.OpenFile(tempFilePath, os.O_WRONLY|os.O_CREATE, 0755)
+			if err != nil {
+				panic(err)
+			}
+			ops := make(chan *jampb.Chunk)
+			go func() {
+				for {
+					in, err := readFileClient.Recv()
+					if err == io.EOF {
+						break
+					}
+					if err != nil {
+						log.Println(err)
+						return
+					}
+					ops <- in.Chunk
+				}
+				close(ops)
+			}()
+
+			currFile.Seek(0, 0)
+			err = targetChunker.ApplyDelta(tempFile, currFile, ops)
+			if err != nil {
+				panic(err)
+			}
+			err = currFile.Close()
+			if err != nil {
+				panic(err)
+			}
+
+			err = tempFile.Close()
+			if err != nil {
+				panic(err)
+			}
+
+			err = os.Rename(tempFilePath, path)
+			if err != nil {
+				panic(err)
+			}
+			results <- nil
+		}
+	}
+
+	jobs := make(chan string, numFiles)
 	results := make(chan error, numFiles)
 
-	go downloadWorkspaceFiles(ctx, apiClient, ownerId, projectId, workspaceId, changeId, paths, results, numFiles)
+	for w := 1; w <= 256; w++ {
+		go worker(jobs, results)
+	}
+
+	bar := progressbar.Default(numFiles, "Downloading")
+	go func() {
+		for path, diff := range fileMetadataDiff.GetDiffs() {
+			if diff.GetType() != jampb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
+				if diff.GetType() == jampb.FileMetadataDiff_Delete {
+					err := os.Remove(path)
+					if err != nil {
+						panic(err)
+					}
+					bar.ChangeMax(bar.GetMax() - 1)
+				} else {
+					jobs <- path
+				}
+			}
+		}
+	}()
+
+	for a := int64(1); a <= numFiles; a++ {
+		err := <-results
+		if err != nil {
+			return err
+		}
+		bar.Add(1)
+	}
+	bar.Finish()
+
+	return nil
+}
+
+func ApplyFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, fileMetadataDiff *jampb.FileMetadataDiff) error {
+	for path, diff := range fileMetadataDiff.GetDiffs() {
+		if diff.GetType() != jampb.FileMetadataDiff_NoOp && diff.GetFile().GetDir() {
+			err := os.MkdirAll(path, os.ModePerm)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	var numFiles int64
+	for _, diff := range fileMetadataDiff.GetDiffs() {
+		if diff.GetType() != jampb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
+			numFiles += 1
+		}
+	}
+
+	if numFiles == 0 {
+		return nil
+	}
 
 	for path, diff := range fileMetadataDiff.GetDiffs() {
 		if diff.GetType() != jampb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
@@ -667,28 +492,77 @@ func ApplyFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerId string, pr
 					fmt.Println(err)
 				}
 			} else {
-				paths <- path
-			}
-		}
-	}
-	close(paths)
 
-	if numFiles > 1000 {
-		fmt.Println("Syncing files")
-		bar := progressbar.Default(numFiles)
-		for res := range results {
-			if res != nil {
-				fmt.Println(res) // Probably should handle this better
-			}
-			bar.Add(1)
-		}
-	} else {
-		for res := range results {
-			if res != nil {
-				fmt.Println(res) // Probably should handle this better
+				currFile, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0755)
+				if err != nil {
+					return err
+				}
+
+				targetChunker, err := fastcdc.NewJamChunker(currFile)
+				if err != nil {
+					return err
+				}
+
+				localChunkHashes, err := targetChunker.CreateHashSignature()
+				if err != nil {
+					return err
+				}
+
+				readFileClient, err := apiClient.ReadWorkspaceFile(context.Background(), &jampb.ReadWorkspaceFileRequest{
+					ProjectId:        projectId,
+					OwnerUsername:    ownerUsername,
+					WorkspaceId:      workspaceId,
+					ChangeId:         changeId,
+					PathHash:         pathToHash(path),
+					LocalChunkHashes: localChunkHashes,
+				})
+				if err != nil {
+					return err
+				}
+				ops := make(chan *jampb.Chunk)
+				go func() {
+					for {
+						in, err := readFileClient.Recv()
+						if err == io.EOF {
+							break
+						}
+						if err != nil {
+							log.Println(err)
+							return
+						}
+						ops <- in.Chunk
+					}
+					close(ops)
+				}()
+				tempFilePath := path + ".jamtemp"
+				tempFile, err := os.OpenFile(tempFilePath, os.O_WRONLY|os.O_CREATE, 0755)
+				if err != nil {
+					return err
+				}
+
+				currFile.Seek(0, 0)
+				err = targetChunker.ApplyDelta(tempFile, currFile, ops)
+				if err != nil {
+					return err
+				}
+				err = currFile.Close()
+				if err != nil {
+					return err
+				}
+
+				err = tempFile.Close()
+				if err != nil {
+					return err
+				}
+
+				err = os.Rename(tempFilePath, path)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
+
 	return nil
 }
 

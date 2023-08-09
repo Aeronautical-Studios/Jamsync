@@ -12,13 +12,10 @@ import (
 	"github.com/zdgeier/jam/pkg/jamenv"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
 	"github.com/zdgeier/jam/pkg/jamsite"
-	"github.com/zdgeier/jam/pkg/jamstores/changestore"
-	"github.com/zdgeier/jam/pkg/jamstores/db"
-	"github.com/zdgeier/jam/pkg/jamstores/mergestore"
-	"github.com/zdgeier/jam/pkg/jamstores/opdatastorecommit"
-	"github.com/zdgeier/jam/pkg/jamstores/opdatastoreworkspace"
-	"github.com/zdgeier/jam/pkg/jamstores/oplocstorecommit"
-	"github.com/zdgeier/jam/pkg/jamstores/oplocstoreworkspace"
+	"github.com/zdgeier/jam/pkg/jamstores/commitdatastore"
+	"github.com/zdgeier/jam/pkg/jamstores/jamdb"
+	"github.com/zdgeier/jam/pkg/jamstores/projectstore"
+	"github.com/zdgeier/jam/pkg/jamstores/workspacedatastore"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
@@ -29,13 +26,10 @@ import (
 )
 
 type JamHub struct {
-	db                   db.JamHubDb
-	opdatastoreworkspace *opdatastoreworkspace.LocalStore
-	opdatastorecommit    *opdatastorecommit.LocalStore
-	oplocstoreworkspace  *oplocstoreworkspace.LocalOpLocStore
-	oplocstorecommit     *oplocstorecommit.LocalOpLocStore
-	changestore          changestore.LocalChangeStore
-	mergestore           *mergestore.LocalStore
+	db                 jamdb.LocalStore
+	workspacedatastore *workspacedatastore.LocalStore
+	commitdatastore    *commitdatastore.LocalStore
+	projectstore       *projectstore.LocalStore
 	jampb.UnimplementedJamHubServer
 }
 
@@ -48,13 +42,10 @@ func Hostname() string {
 
 func New() (closer func(), err error) {
 	jamhub := JamHub{
-		db:                   db.New(),
-		opdatastoreworkspace: opdatastoreworkspace.NewOpDataStoreWorkspace(),
-		opdatastorecommit:    opdatastorecommit.NewOpDataStoreCommit(),
-		oplocstoreworkspace:  oplocstoreworkspace.NewOpLocStoreWorkspace(),
-		oplocstorecommit:     oplocstorecommit.NewOpLocStoreCommit(),
-		changestore:          changestore.NewLocalChangeStore(),
-		mergestore:           mergestore.NewLocalMergeStore(),
+		db:                 jamdb.NewLocalStore(),
+		workspacedatastore: workspacedatastore.NewLocalStore(),
+		commitdatastore:    commitdatastore.NewLocalStore(),
+		projectstore:       projectstore.NewLocalStore(),
 	}
 
 	opts := []grpc.ServerOption{

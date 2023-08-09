@@ -11,33 +11,28 @@ import (
 )
 
 func DownloadCommittedFile(client jampb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
-	sig := make([]*jampb.ChunkHash, 0)
 	localChunker, err := fastcdc.NewJamChunker(localReader)
 	if err != nil {
 		return err
 	}
 
-	err = localChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
-		sig = append(sig, ch)
-		return nil
+	localChunkHashes, err := localChunker.CreateHashSignature()
+	if err != nil {
+		return err
+	}
+
+	stream, err := client.ReadCommittedFile(context.Background(), &jampb.ReadCommittedFileRequest{
+		ProjectId:        projectId,
+		OwnerUsername:    ownerUsername,
+		CommitId:         commitId,
+		PathHash:         PathToHash(filePath),
+		LocalChunkHashes: localChunkHashes,
 	})
 	if err != nil {
 		return err
 	}
 
-	stream, err := client.ReadCommittedFile(context.TODO(), &jampb.ReadCommittedFileRequest{
-		ProjectId:     projectId,
-		OwnerUsername: ownerUsername,
-		CommitId:      commitId,
-		PathHash:      PathToHash(filePath),
-		ChunkHashes:   sig,
-	})
-	if err != nil {
-		return err
-	}
-
-	numOps := 0
-	ops := make(chan *jampb.Operation)
+	chunks := make(chan *jampb.Chunk)
 	go func() {
 		for {
 			in, err := stream.Recv()
@@ -48,14 +43,13 @@ func DownloadCommittedFile(client jampb.JamHubClient, ownerUsername string, proj
 				log.Println(err)
 				return
 			}
-			ops <- in.GetOp()
-			numOps += 1
+			chunks <- in.Chunk
 		}
-		close(ops)
+		close(chunks)
 	}()
 
 	localReader.Seek(0, 0)
-	err = localChunker.ApplyDelta(localWriter, localReader, ops)
+	err = localChunker.ApplyDelta(localWriter, localReader, chunks)
 	if err != nil {
 		return err
 	}
@@ -64,33 +58,33 @@ func DownloadCommittedFile(client jampb.JamHubClient, ownerUsername string, proj
 }
 
 func DownloadWorkspaceFile(client jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
-	sig := make([]*jampb.ChunkHash, 0)
 	localChunker, err := fastcdc.NewJamChunker(localReader)
 	if err != nil {
 		return err
 	}
 
-	err = localChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
-		sig = append(sig, ch)
+	localChunkHashes := make(map[uint64][]byte)
+	err = localChunker.CreateSignature(func(localChunk *jampb.ChunkHash) error {
+		localChunkHashes[localChunk.Hash] = nil
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	stream, err := client.ReadWorkspaceFile(context.TODO(), &jampb.ReadWorkspaceFileRequest{
-		ProjectId:     projectId,
-		OwnerUsername: ownerUsername,
-		WorkspaceId:   workspaceId,
-		ChangeId:      changeId,
-		PathHash:      PathToHash(filePath),
-		ChunkHashes:   sig,
+	stream, err := client.ReadWorkspaceFile(context.Background(), &jampb.ReadWorkspaceFileRequest{
+		ProjectId:        projectId,
+		OwnerUsername:    ownerUsername,
+		WorkspaceId:      workspaceId,
+		ChangeId:         changeId,
+		PathHash:         PathToHash(filePath),
+		LocalChunkHashes: localChunkHashes,
 	})
 	if err != nil {
 		return err
 	}
 
-	ops := make(chan *jampb.Operation)
+	chunks := make(chan *jampb.Chunk)
 	go func() {
 		for {
 			in, err := stream.Recv()
@@ -98,21 +92,20 @@ func DownloadWorkspaceFile(client jampb.JamHubClient, ownerUsername string, proj
 				break
 			}
 			if err != nil {
-				log.Println(err)
-				return
+				log.Fatal(err)
 			}
-			ops <- in.GetOp()
+			chunks <- in.Chunk
 		}
-		close(ops)
+		close(chunks)
 	}()
 
 	localReader.Seek(0, 0)
-	err = localChunker.ApplyDelta(localWriter, localReader, ops)
+	err = localChunker.ApplyDelta(localWriter, localReader, chunks)
 	if err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 func PathToHash(path string) []byte {

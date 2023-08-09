@@ -49,7 +49,7 @@ func Update() {
 		return
 	}
 
-	_, err = apiClient.UpdateWorkspace(context.Background(), &jampb.UpdateWorkspaceRequest{
+	updateResp, err := apiClient.UpdateWorkspace(context.Background(), &jampb.UpdateWorkspaceRequest{
 		ProjectId:     state.ProjectId,
 		WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
 		OwnerUsername: state.OwnerUsername,
@@ -81,6 +81,15 @@ func Update() {
 	} else {
 		fmt.Println("No changes to pull")
 	}
+
+	if len(updateResp.GetConflicts()) > 0 {
+		fmt.Println("Conflicts:")
+		for _, conflict := range updateResp.GetConflicts() {
+			fmt.Println(conflict)
+		}
+		fmt.Println("Resolve these conflicts in an editor before running `jam push`.")
+	}
+
 	err = statefile.StateFile{
 		OwnerUsername: state.OwnerUsername,
 		ProjectId:     state.ProjectId,

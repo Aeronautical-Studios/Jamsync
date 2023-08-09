@@ -39,7 +39,6 @@ func Status() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Project:   %s\n", nameResp.ProjectName)
 
 	if state.WorkspaceInfo != nil {
 		workspaceNameResp, err := apiClient.GetWorkspaceName(context.Background(), &jampb.GetWorkspaceNameRequest{
@@ -51,8 +50,10 @@ func Status() {
 			panic(err)
 		}
 		fmt.Printf(
-			"Workspace: %s\n"+
+			"Project:   %s\n"+
+				"Workspace: %s\n"+
 				"Change:    %d\n",
+			nameResp.ProjectName,
 			workspaceNameResp.GetWorkspaceName(),
 			state.WorkspaceInfo.ChangeId,
 		)
@@ -94,6 +95,7 @@ func Status() {
 			log.Panic("invalid state: local change id greater than remote change id")
 		}
 	} else {
+		fmt.Printf("Project: %s\n", nameResp.ProjectName)
 		fmt.Printf("Commit:  %d\n", state.CommitInfo.CommitId)
 	}
 }
