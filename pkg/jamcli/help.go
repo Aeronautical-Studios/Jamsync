@@ -27,6 +27,8 @@ func Help(version string, built string) {
 	fmt.Println("update     - brings mainline changes into workspace.")
 	fmt.Println("workspaces - list active workspaces.")
 	fmt.Println("projects   - list your projects.")
+	fmt.Println("lock       - lock a file or directory for collaborator(s).")
+	fmt.Println("unlock     - unlock a file or directory for collaborator(s).")
 	fmt.Println("logout     - deletes ~/.jamhubauth.")
 	fmt.Println("help       - show this text")
 	fmt.Println("\nHappy jammin'!")

@@ -11,6 +11,13 @@ type LocalStore struct {
 	db *sql.DB
 }
 
+type FileLock struct {
+	ProjectId uint64
+	Username string
+	B64EncodedPath string
+	IsDir    bool
+}
+
 func NewLocalStore() (db LocalStore) {
 	err := os.MkdirAll("./jamdata", os.ModePerm)
 	if err != nil {
@@ -25,6 +32,7 @@ func NewLocalStore() (db LocalStore) {
 	CREATE TABLE IF NOT EXISTS users (username TEXT, user_id TEXT, UNIQUE(username, user_id));
 	CREATE TABLE IF NOT EXISTS projects (name TEXT, owner_username TEXT, UNIQUE(name, owner_username));
 	CREATE TABLE IF NOT EXISTS collaborators (project_id INTEGER, username TEXT, UNIQUE(project_id, username));
+	CREATE TABLE IF NOT EXISTS filelocks (project_id INTEGER, username TEXT, file_hash TEXT, is_dir BOOL, UNIQUE(project_id, username, file_hash));
 	CREATE TABLE IF NOT EXISTS operation_stream_tokens (token TEXT, owner_username TEXT, project_id INTEGER, workspace_id INTEGER, change_id INTEGER, expires TIMESTAMP DEFAULT (DATETIME(CURRENT_TIMESTAMP, '+5 hours')), UNIQUE(token));
 	`
 	_, err = conn.Exec(sqlStmt)
@@ -234,4 +242,80 @@ func (j LocalStore) UserId(username string) (string, error) {
 	var userId string
 	err := row.Scan(&username)
 	return userId, err
+}
+
+func (j LocalStore) CreateFileLock(projectId uint64, username string, b64EncodedPath string, isDir bool) error {
+	rows, err := j.db.Query("SELECT username FROM filelocks WHERE project_id = ? AND username != ? AND file_hash = ?", projectId, username, b64EncodedPath)
+
+	for rows.Next() {
+		var username string
+		err = rows.Scan(&username)
+		if err != nil {
+			return err
+		}
+
+		if username != "" {
+			return errors.New("File lock is already owned by another user")
+		}
+	}
+
+	_, err = j.db.Exec("INSERT OR REPLACE INTO filelocks(project_id, username, file_hash, is_dir) VALUES(?, ?, ?, ?)", projectId, username, b64EncodedPath, isDir)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (j LocalStore) GetFileLock(projectId uint64, username string, b64EncodedPath string) (bool, error) {
+	row := j.db.QueryRow("SELECT EXISTS(SELECT 1 FROM filelocks WHERE project_id = ? AND username = ? AND file_hash = ?)", projectId, username, b64EncodedPath)
+	if row.Err() != nil {
+		return false, row.Err()
+	}
+
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+func (j LocalStore) ListFileLocks(projectId uint64) ([]FileLock, error) {
+	rows, err := j.db.Query("SELECT project_id, username, file_hash, is_dir FROM filelocks WHERE project_id = ?", projectId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := make([]FileLock, 0)
+	for rows.Next() {
+		u := FileLock{}
+		err = rows.Scan(&u.ProjectId, &u.Username, &u.B64EncodedPath, &u.IsDir)
+		if err != nil {
+			return nil, err
+		}
+		data = append(data, u)
+	}
+	return data, err
+}
+
+func (j LocalStore) DeleteFileLock(projectId uint64, username string, b64EncodedPath string) error {
+	rows, err := j.db.Query("SELECT username FROM filelocks WHERE project_id = ? AND username != ? AND file_hash = ?", projectId, username, b64EncodedPath)
+
+	for rows.Next() {
+		var username string
+		err = rows.Scan(&username)
+		if err != nil {
+			return err
+		}
+
+		if username != "" {
+			return errors.New("File lock is already owned by another user")
+		}
+	}
+
+	_, err = j.db.Exec("DELETE FROM filelocks WHERE project_id = ? AND username = ? AND file_hash = ?", projectId, username, b64EncodedPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

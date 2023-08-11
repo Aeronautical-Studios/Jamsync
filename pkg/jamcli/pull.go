@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
 	"golang.org/x/oauth2"
+	b64 "encoding/base64"
 )
 
 func Pull() {
@@ -32,6 +34,7 @@ func Pull() {
 	}
 	defer closer()
 
+	fmt.Println("Pulling changes from Jam...")
 	if state.CommitInfo == nil {
 		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &jampb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
 		if err != nil {
@@ -103,6 +106,35 @@ func Pull() {
 		}.Save()
 		if err != nil {
 			panic(err)
+		}
+	}
+
+	resp, err := apiClient.CurrentUser(context.Background(), &jampb.CurrentUserRequest{})
+	if err != nil {
+		panic(err)
+	}
+
+	// handle incoming file locks
+	lockedFiles, err := apiClient.ListFileLocks(context.Background(), &jampb.ListFileLocksRequest{
+		OwnerUsername: resp.GetUsername(),
+		ProjectId:     state.ProjectId,
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	// check lockedFiles for locks that are not owned by the current user and set them to read only
+	for _, lock := range lockedFiles.GetLockedFiles() {
+		if lock.GetOwnerUsername() != resp.GetUsername() {
+			// set file to read only
+			b64EncodedPath := lock.GetB64EncodedPath()
+			filePath, err := b64.URLEncoding.DecodeString(b64EncodedPath)
+			err = os.Chmod(string(filePath), 0444)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Printf("User \"%s\" locked file(s): %s\n", lock.GetOwnerUsername(), string(filePath))
 		}
 	}
 }
