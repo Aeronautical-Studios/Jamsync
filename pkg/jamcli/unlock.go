@@ -48,7 +48,12 @@ func UnLock() {
 		os.Exit(0)
 	}
 
-	cleanpath, err := unlockFile(apiClient, state.OwnerUsername, state.ProjectId, os.Args[2])
+	resp, err := apiClient.CurrentUser(context.Background(), &jampb.CurrentUserRequest{})
+	if err != nil {
+		panic(err)
+	}
+
+	cleanpath, err := unlockFile(apiClient, resp.GetUsername(), state.ProjectId, os.Args[2])
 
 	if err != nil {
 		log.Panic(err)
@@ -60,7 +65,7 @@ func UnLock() {
 // private methods
 
 // unlock the file given by path
-func unlockFile(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, path string) (string, error) {
+func unlockFile(apiClient jampb.JamHubClient, username string, projectId uint64, path string) (string, error) {
 	path = filepath.Clean(path)
 
 	absFilePath, err := getAbsPath(path)
@@ -75,8 +80,8 @@ func unlockFile(apiClient jampb.JamHubClient, ownerUsername string, projectId ui
 
 	res, err := apiClient.UpdateFileLock(context.Background(), &jampb.UpdateFileLockRequest{
 		ProjectId: projectId,
-		OwnerUsername: ownerUsername,
-		B64EncodedPath: b64.URLEncoding.EncodeToString([]byte(absFilePath)),
+		OwnerUsername: username,
+		B64EncodedPath: b64.URLEncoding.EncodeToString([]byte(path)),
 		IsDir: fileInfo.IsDir(),
 		LockUnlockFlag: false,
 	})
