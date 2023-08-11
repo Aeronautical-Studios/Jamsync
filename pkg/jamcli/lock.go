@@ -49,7 +49,12 @@ func Lock() {
 		os.Exit(0)
 	}
 
-	cleanpath, err := lockFile(apiClient, state.OwnerUsername, state.ProjectId, os.Args[2])
+	resp, err := apiClient.CurrentUser(context.Background(), &jampb.CurrentUserRequest{})
+	if err != nil {
+		panic(err)
+	}
+
+	cleanpath, err := lockFile(apiClient, resp.GetUsername(), state.ProjectId, os.Args[2])
 
 	if err != nil {
 		log.Panic(err)
@@ -77,7 +82,7 @@ func lockFile(apiClient jampb.JamHubClient, ownerUsername string, projectId uint
 	res, err := apiClient.UpdateFileLock(context.Background(), &jampb.UpdateFileLockRequest{
 		ProjectId: projectId,
 		OwnerUsername: ownerUsername,
-		B64EncodedPath: b64.URLEncoding.EncodeToString([]byte(absFilePath)),
+		B64EncodedPath: b64.URLEncoding.EncodeToString([]byte(path)),
 		IsDir: fileInfo.IsDir(),
 		LockUnlockFlag: true,
 	})
