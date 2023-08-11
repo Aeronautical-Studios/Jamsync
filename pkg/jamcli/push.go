@@ -33,7 +33,7 @@ func Push() {
 	defer closer()
 
 	if stateFile.CommitInfo != nil {
-		fmt.Println("Currently on the mainline, use `workon` to make changes.")
+		fmt.Println("Currently on the mainline, use `jam workon <workspace name>` to make changes.")
 		os.Exit(1)
 	}
 

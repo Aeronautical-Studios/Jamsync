@@ -1,16 +1,13 @@
-package db
+package jamdb
 
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 )
 
-var ProjectAlreadyExists = errors.New("project already exists")
-
-type JamHubDb struct {
+type LocalStore struct {
 	db *sql.DB
 }
 
@@ -21,12 +18,12 @@ type FileLock struct {
 	IsDir    bool
 }
 
-func New() (jamhubDB JamHubDb) {
-	err := os.MkdirAll("./jamhubdata", os.ModePerm)
+func NewLocalStore() (db LocalStore) {
+	err := os.MkdirAll("./jamdata", os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
-	conn, err := sql.Open("sqlite3", "./jamhubdata/jamhub.db")
+	conn, err := sql.Open("sqlite3", "./jamdata/jam.db")
 	if err != nil {
 		panic(err)
 	}
@@ -36,13 +33,14 @@ func New() (jamhubDB JamHubDb) {
 	CREATE TABLE IF NOT EXISTS projects (name TEXT, owner_username TEXT, UNIQUE(name, owner_username));
 	CREATE TABLE IF NOT EXISTS collaborators (project_id INTEGER, username TEXT, UNIQUE(project_id, username));
 	CREATE TABLE IF NOT EXISTS filelocks (project_id INTEGER, username TEXT, file_hash TEXT, is_dir BOOL, UNIQUE(project_id, username, file_hash));
+	CREATE TABLE IF NOT EXISTS operation_stream_tokens (token TEXT, owner_username TEXT, project_id INTEGER, workspace_id INTEGER, change_id INTEGER, expires TIMESTAMP DEFAULT (DATETIME(CURRENT_TIMESTAMP, '+5 hours')), UNIQUE(token));
 	`
 	_, err = conn.Exec(sqlStmt)
 	if err != nil {
 		panic(err)
 	}
 
-	return JamHubDb{conn}
+	return LocalStore{db: conn}
 }
 
 type Project struct {
@@ -51,10 +49,28 @@ type Project struct {
 	Id            uint64
 }
 
-func (j JamHubDb) AddProject(projectName string, ownerUsername string) (uint64, error) {
+func (j *LocalStore) AddOperationStreamToken(ownerUsername string, projectId, workspaceId, changeId uint64, token []byte) error {
+	_, err := j.db.Exec("DELETE FROM operation_stream_tokens WHERE expires < CURRENT_TIMESTAMP")
+	if err != nil {
+		return err
+	}
+
+	_, err = j.db.Exec("INSERT INTO operation_stream_tokens (token, owner_username, project_id, workspace_id, change_id) VALUES (?, ?, ?, ?, ?)", token, ownerUsername, projectId, workspaceId, changeId)
+	return err
+}
+
+func (j *LocalStore) GetOperationStreamTokenInfo(token []byte) (ownerUsername string, projectId, workspaceId, changeId uint64, err error) {
+	err = j.db.QueryRow("SELECT owner_username, project_id, workspace_id, change_id FROM operation_stream_tokens WHERE token = ?", token).Scan(&ownerUsername, &projectId, &workspaceId, &changeId)
+	if err != nil {
+		return "", 0, 0, 0, err
+	}
+	return ownerUsername, projectId, workspaceId, changeId, nil
+}
+
+func (j LocalStore) AddProject(projectName string, ownerUsername string) (uint64, error) {
 	_, err := j.GetProjectId(projectName, ownerUsername)
 	if !errors.Is(sql.ErrNoRows, err) {
-		return 0, ProjectAlreadyExists
+		return 0, err
 	}
 
 	res, err := j.db.Exec("INSERT INTO projects(name, owner_username) VALUES(?, ?)", projectName, ownerUsername)
@@ -70,12 +86,12 @@ func (j JamHubDb) AddProject(projectName string, ownerUsername string) (uint64, 
 	return uint64(id), nil
 }
 
-func (j JamHubDb) AddCollaborator(projectId uint64, collabUsername string) error {
+func (j LocalStore) AddCollaborator(projectId uint64, collabUsername string) error {
 	_, err := j.db.Exec("INSERT OR IGNORE INTO collaborators(project_id, username) VALUES(?, ?)", projectId, collabUsername)
 	return err
 }
 
-func (j JamHubDb) ListCollaborators(projectId uint64) ([]string, error) {
+func (j LocalStore) ListCollaborators(projectId uint64) ([]string, error) {
 	rows, err := j.db.Query("SELECT username FROM collaborators WHERE project_id = ?", projectId)
 	if err != nil {
 		return nil, err
@@ -94,7 +110,7 @@ func (j JamHubDb) ListCollaborators(projectId uint64) ([]string, error) {
 	return data, err
 }
 
-func (j JamHubDb) HasCollaborator(projectId uint64, collaborator string) bool {
+func (j LocalStore) HasCollaborator(projectId uint64, collaborator string) bool {
 	var username string
 	err := j.db.QueryRow(`SELECT username FROM collaborators WHERE project_id = ? AND username = ?;`, projectId, collaborator).Scan(&username)
 	if err != nil {
@@ -108,26 +124,7 @@ func (j JamHubDb) HasCollaborator(projectId uint64, collaborator string) bool {
 	return true
 }
 
-func (j JamHubDb) DeleteProject(projectName string, ownerUsername string) (uint64, error) {
-	_, err := j.GetProjectId(projectName, ownerUsername)
-	if errors.Is(sql.ErrNoRows, err) {
-		return 0, fmt.Errorf("project does not exist")
-	}
-
-	res, err := j.db.Exec("DELETE FROM projects WHERE name = ? AND owner_username = ?", projectName, ownerUsername)
-	if err != nil {
-		return 0, err
-	}
-
-	var id int64
-	if id, err = res.LastInsertId(); err != nil {
-		return 0, err
-	}
-
-	return uint64(id), nil
-}
-
-func (j JamHubDb) GetUserId(username string) (string, error) {
+func (j LocalStore) GetUserId(username string) (string, error) {
 	row := j.db.QueryRow("SELECT user_id FROM users WHERE username = ?", username)
 	if row.Err() != nil {
 		return "", row.Err()
@@ -138,7 +135,7 @@ func (j JamHubDb) GetUserId(username string) (string, error) {
 	return userId, err
 }
 
-func (j JamHubDb) GetUsername(user_id string) (string, error) {
+func (j LocalStore) GetUsername(user_id string) (string, error) {
 	row := j.db.QueryRow("SELECT username FROM users WHERE user_id = ?", user_id)
 	if row.Err() != nil {
 		return "", row.Err()
@@ -149,7 +146,7 @@ func (j JamHubDb) GetUsername(user_id string) (string, error) {
 	return userId, err
 }
 
-func (j JamHubDb) GetProjectOwnerUsername(projectId uint64) (string, error) {
+func (j LocalStore) GetProjectOwnerUsername(projectId uint64) (string, error) {
 	row := j.db.QueryRow("SELECT owner_username FROM projects WHERE rowid = ?", projectId)
 	if row.Err() != nil {
 		return "", row.Err()
@@ -160,7 +157,7 @@ func (j JamHubDb) GetProjectOwnerUsername(projectId uint64) (string, error) {
 	return ownerUsername, err
 }
 
-func (j JamHubDb) GetProjectId(projectName string, ownerUsername string) (uint64, error) {
+func (j LocalStore) GetProjectId(projectName string, ownerUsername string) (uint64, error) {
 	row := j.db.QueryRow("SELECT rowid FROM projects WHERE name = ? AND owner_username = ?", projectName, ownerUsername)
 	if row.Err() != nil {
 		return 0, row.Err()
@@ -171,7 +168,7 @@ func (j JamHubDb) GetProjectId(projectName string, ownerUsername string) (uint64
 	return id, err
 }
 
-func (j JamHubDb) GetProjectName(id uint64, ownerUsername string) (string, error) {
+func (j LocalStore) GetProjectName(id uint64, ownerUsername string) (string, error) {
 	row := j.db.QueryRow("SELECT name FROM projects WHERE rowid = ? AND owner_username = ?", id, ownerUsername)
 	if row.Err() != nil {
 		return "", row.Err()
@@ -182,7 +179,7 @@ func (j JamHubDb) GetProjectName(id uint64, ownerUsername string) (string, error
 	return name, err
 }
 
-func (j JamHubDb) ListProjectsOwned(ownerUsername string) ([]Project, error) {
+func (j LocalStore) ListProjectsOwned(ownerUsername string) ([]Project, error) {
 	rows, err := j.db.Query("SELECT rowid, name, owner_username FROM projects WHERE owner_username = ?", ownerUsername)
 	if err != nil {
 		return nil, err
@@ -201,7 +198,7 @@ func (j JamHubDb) ListProjectsOwned(ownerUsername string) ([]Project, error) {
 	return data, err
 }
 
-func (j JamHubDb) ListProjectsAsCollaborator(username string) ([]Project, error) {
+func (j LocalStore) ListProjectsAsCollaborator(username string) ([]Project, error) {
 	rows, err := j.db.Query("SELECT p.rowid, p.name, p.owner_username from projects AS p INNER JOIN collaborators AS c WHERE p.rowid = c.project_id AND c.username = ?", username)
 	if err != nil {
 		return nil, err
@@ -220,12 +217,12 @@ func (j JamHubDb) ListProjectsAsCollaborator(username string) ([]Project, error)
 	return data, err
 }
 
-func (j JamHubDb) CreateUser(username, userId string) error {
+func (j LocalStore) CreateUser(username, userId string) error {
 	_, err := j.db.Exec("INSERT OR IGNORE INTO users(username, user_id) VALUES (?, ?)", username, userId)
 	return err
 }
 
-func (j JamHubDb) Username(userId string) (string, error) {
+func (j LocalStore) Username(userId string) (string, error) {
 	row := j.db.QueryRow("SELECT username FROM users WHERE user_id = ?", userId)
 	if row.Err() != nil {
 		return "", row.Err()
@@ -236,7 +233,7 @@ func (j JamHubDb) Username(userId string) (string, error) {
 	return username, err
 }
 
-func (j JamHubDb) UserId(username string) (string, error) {
+func (j LocalStore) UserId(username string) (string, error) {
 	row := j.db.QueryRow("SELECT user_id FROM users WHERE username = ?", username)
 	if row.Err() != nil {
 		return "", row.Err()
@@ -247,7 +244,7 @@ func (j JamHubDb) UserId(username string) (string, error) {
 	return userId, err
 }
 
-func (j JamHubDb) CreateFileLock(projectId uint64, username string, b64EncodedPath string, isDir bool) error {
+func (j LocalStore) CreateFileLock(projectId uint64, username string, b64EncodedPath string, isDir bool) error {
 	_, err := j.db.Exec("INSERT OR REPLACE INTO filelocks(project_id, username, file_hash, is_dir) VALUES(?, ?, ?, ?)", projectId, username, b64EncodedPath, isDir)
 	if err != nil {
 		return err
@@ -256,7 +253,7 @@ func (j JamHubDb) CreateFileLock(projectId uint64, username string, b64EncodedPa
 	return nil
 }
 
-func (j JamHubDb) GetFileLock(projectId uint64, username string, b64EncodedPath string) (bool, error) {
+func (j LocalStore) GetFileLock(projectId uint64, username string, b64EncodedPath string) (bool, error) {
 	row := j.db.QueryRow("SELECT EXISTS(SELECT 1 FROM filelocks WHERE project_id = ? AND username = ? AND file_hash = ?)", projectId, username, b64EncodedPath)
 	if row.Err() != nil {
 		return false, row.Err()
@@ -267,7 +264,7 @@ func (j JamHubDb) GetFileLock(projectId uint64, username string, b64EncodedPath 
 	return exists, err
 }
 
-func (j JamHubDb) ListFileLocks(projectId uint64) ([]FileLock, error) {
+func (j LocalStore) ListFileLocks(projectId uint64) ([]FileLock, error) {
 	rows, err := j.db.Query("SELECT project_id, username, file_hash, is_dir FROM filelocks WHERE project_id = ?", projectId)
 	if err != nil {
 		return nil, err
@@ -286,7 +283,7 @@ func (j JamHubDb) ListFileLocks(projectId uint64) ([]FileLock, error) {
 	return data, err
 }
 
-func (j JamHubDb) DeleteFileLock(projectId uint64, username string, b64EncodedPath string) error {
+func (j LocalStore) DeleteFileLock(projectId uint64, username string, b64EncodedPath string) error {
 	_, err := j.db.Exec("DELETE FROM filelocks WHERE project_id = ? AND username = ? AND file_hash = ?", projectId, username, b64EncodedPath)
 	if err != nil {
 		return err

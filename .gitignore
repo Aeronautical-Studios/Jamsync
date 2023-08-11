@@ -14,7 +14,6 @@ go.work.sum
 scripts/
 systemd/
 jb
-jamhubdata/
 jamhub.db
 jamhub-build*
 .jamhub

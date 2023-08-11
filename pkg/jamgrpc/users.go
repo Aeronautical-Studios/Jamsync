@@ -33,7 +33,3 @@ func (s JamHub) CurrentUser(ctx context.Context, in *jampb.CurrentUserRequest) (
 
 	return &jampb.CurrentUserResponse{Username: username}, nil
 }
-
-func (s JamHub) Ping(ctx context.Context, in *jampb.PingRequest) (*jampb.Pong, error) {
-	return &jampb.Pong{}, nil
-}

@@ -1,4 +1,4 @@
-// Modified by from https://github.com/jbreiding/rsync-go/blob/master/gen_test.go
+// Modified by from https://github.com/jbreiding/rsync-go/blob/master/gen_test.go by Zach Geier (zach@jamhub.dev)
 
 package fastcdc
 
@@ -119,7 +119,7 @@ func Test_GenData(t *testing.T) {
 		sourceBuffer := bytes.NewReader(p.Source.Data)
 		targetBuffer := bytes.NewReader(p.Target.Data)
 
-		sig := make([]*jampb.ChunkHash, 0, 10)
+		sig := make(map[uint64][]byte, 10)
 		sourceChunker, err := NewChunker(sourceBuffer, Options{
 			AverageSize: 1024 * 64,
 			Seed:        84372,
@@ -132,30 +132,29 @@ func Test_GenData(t *testing.T) {
 		assertNoError(t, err)
 
 		err = targetChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
-			sig = append(sig, ch)
+			sig[ch.GetHash()] = nil
 			return nil
 		})
 		if err != nil {
 			t.Errorf("Failed to create signature: %s", err)
 		}
-		opsOut := make(chan *jampb.Operation)
+		chunksOut := make(chan *jampb.Chunk)
 		tot := 0
 		go func() {
 			var blockCt, dataCt, bytes int
-			defer close(opsOut)
-			err := sourceChunker.CreateDelta(sig, func(op *jampb.Operation) error {
-				tot += int(op.Chunk.GetLength()) + int(op.ChunkHash.GetLength())
-				switch op.Type {
-				case jampb.Operation_OpBlock:
+			defer close(chunksOut)
+			err := sourceChunker.CreateDelta(sig, func(chunk *jampb.Chunk) error {
+				tot += int(chunk.Length)
+				if chunk.Data == nil {
 					blockCt++
-				case jampb.Operation_OpData:
-					b := make([]byte, len(op.Chunk.Data))
-					copy(b, op.Chunk.Data)
-					op.Chunk.Data = b
+				} else {
+					b := make([]byte, len(chunk.Data))
+					copy(b, chunk.Data)
+					chunk.Data = b
 					dataCt++
-					bytes += len(op.Chunk.Data)
+					bytes += len(chunk.Data)
 				}
-				opsOut <- op
+				chunksOut <- chunk
 				return nil
 			})
 			t.Logf("Block Ops:%5d, Data Ops: %5d, Data Len: %5dKiB, For %s.", blockCt, dataCt, bytes/1024, p.Description)
@@ -167,7 +166,7 @@ func Test_GenData(t *testing.T) {
 		result := new(bytes.Buffer)
 
 		readBuffer := bytes.NewReader(p.Target.Data)
-		err = targetChunker.ApplyDelta(result, readBuffer, opsOut)
+		err = targetChunker.ApplyDelta(result, readBuffer, chunksOut)
 		if err != nil {
 			t.Errorf("Failed to apply delta: %s", err)
 		}

@@ -1,4 +1,4 @@
-package mergestore
+package merger
 
 import (
 	"bytes"
@@ -11,29 +11,13 @@ import (
 	"github.com/zdgeier/jam/pkg/jamstores/file"
 )
 
-type LocalStore struct {
-}
-
-// Used to merge files. Temporarily stores them locally to use diff3 utility.
-func NewLocalMergeStore() *LocalStore {
-	return &LocalStore{}
-}
-
-func (s *LocalStore) filePath(ownerUsername string, projectId uint64, pathHash []byte) string {
-	return fmt.Sprintf("/tmp/jamhubmergestore/%s/%d/%02X", ownerUsername, projectId, pathHash)
-}
-
-func (s *LocalStore) fileDir(ownerUsername string, projectId uint64) string {
-	return fmt.Sprintf("/tmp/jamhubmergestore/%s/%d", ownerUsername, projectId)
-}
-
-func (s *LocalStore) Merge(ownerUsername string, projectId uint64, metadataFilePath string, old, mine, theirs *bytes.Reader) (*bytes.Reader, error) {
-	err := os.MkdirAll(s.fileDir(ownerUsername, projectId), os.ModePerm)
+func Merge(ownerUsername string, projectId uint64, metadataFilePath string, old, mine, theirs *bytes.Buffer) (*bytes.Reader, error) {
+	err := os.MkdirAll(fmt.Sprintf("/tmp/jamhubmergestore/%s/%d", ownerUsername, projectId), os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
 
-	filePath := s.filePath(ownerUsername, projectId, file.PathToHash(metadataFilePath))
+	filePath := fmt.Sprintf("/tmp/jamhubmergestore/%s/%d/%02X", ownerUsername, projectId, file.PathToHash(metadataFilePath))
 
 	oldBytes, err := io.ReadAll(old)
 	if err != nil {
@@ -67,9 +51,9 @@ func (s *LocalStore) Merge(ownerUsername string, projectId uint64, metadataFileP
 
 	out, _ := exec.Command("diff3", "-m", minePath, oldPath, theirsPath).Output()
 
-	os.Remove(oldPath)
-	os.Remove(minePath)
-	os.Remove(theirsPath)
+	// os.Remove(oldPath)
+	// os.Remove(minePath)
+	// os.Remove(theirsPath)
 
 	oldString := strings.ReplaceAll(string(out), oldPath, metadataFilePath+".old")
 	mineString := strings.ReplaceAll(string(oldString), minePath, metadataFilePath+".mine")

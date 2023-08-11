@@ -22,8 +22,6 @@ const (
 
 	minSize = 64
 	maxSize = 1 << 30
-
-	defaultNormalization = 2
 )
 
 // Chunker implements the FastCDC content defined chunking algorithm.
@@ -95,8 +93,9 @@ func (opts *Options) setDefaults() {
 
 func NewJamChunker(rd io.Reader) (*Chunker, error) {
 	return NewChunker(rd, Options{
-		AverageSize: 1024 * 64,
+		AverageSize: miB,
 		Seed:        84372,
+		MaxSize:     miB*4 - kiB,
 	})
 }
 

@@ -2,8 +2,6 @@
 
 # Jam
 
-test
-
 Jam is an open-source version control system for game
 development. We're building an open-source alternative to Perforce using
 [Go](https://go.dev) and

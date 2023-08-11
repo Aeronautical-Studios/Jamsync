@@ -58,24 +58,5 @@ func Merge() {
 		fmt.Println("Workspace is not up to date with latest mainline changes. Use `jam update` to update to the workspace.")
 		return
 	}
-
-	_, err = apiClient.DeleteWorkspace(context.Background(), &jampb.DeleteWorkspaceRequest{
-		OwnerUsername: state.OwnerUsername,
-		ProjectId:     state.ProjectId,
-		WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
-	})
-	if err != nil {
-		log.Panic(err)
-	}
-
-	err = statefile.StateFile{
-		OwnerUsername: state.OwnerUsername,
-		ProjectId:     state.ProjectId,
-		CommitInfo: &statefile.CommitInfo{
-			CommitId: resp.CommitId,
-		},
-	}.Save()
-	if err != nil {
-		log.Panic(err)
-	}
+	fmt.Println("Created commit", resp.CommitId)
 }

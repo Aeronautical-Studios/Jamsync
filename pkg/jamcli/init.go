@@ -3,6 +3,7 @@ package jamcli
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -17,7 +18,8 @@ import (
 )
 
 func InitNewProject(apiClient jampb.JamHubClient, projectName string) {
-	resp, err := apiClient.AddProject(context.Background(), &jampb.AddProjectRequest{
+	ctx := context.Background()
+	resp, err := apiClient.AddProject(ctx, &jampb.AddProjectRequest{
 		ProjectName: projectName,
 	})
 	if status.Code(err) == codes.AlreadyExists {
@@ -32,9 +34,10 @@ func InitNewProject(apiClient jampb.JamHubClient, projectName string) {
 	}
 	fmt.Println("Initializing a project at " + currentPath + ". Uploading files...")
 
-	workspaceResp, err := apiClient.CreateWorkspace(context.TODO(), &jampb.CreateWorkspaceRequest{OwnerUsername: resp.GetOwnerUsername(), ProjectId: resp.ProjectId, WorkspaceName: "init"})
+	workspaceResp, err := apiClient.CreateWorkspace(ctx, &jampb.CreateWorkspaceRequest{OwnerUsername: resp.GetOwnerUsername(), ProjectId: resp.ProjectId, WorkspaceName: "init"})
 	if err != nil {
-		log.Panic(err)
+		fmt.Println("Project already exists")
+		return
 	}
 
 	fileMetadata := ReadLocalFileList()
@@ -78,6 +81,20 @@ func InitNewProject(apiClient jampb.JamHubClient, projectName string) {
 		panic(err)
 	}
 	fmt.Println("Done! Run `jam workon <workspace name>` to start making changes.")
+}
+
+func IsEmpty(name string) (bool, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		return true, nil
+	}
+	return false, err
 }
 
 func InitExistingProject(apiClient jampb.JamHubClient, ownerUsername string, projectName string) {
@@ -151,6 +168,14 @@ func InitConfig() {
 			InitNewProject(apiClient, projectName)
 			break
 		} else if strings.ToLower(flag) == "n" {
+			empty, err := IsEmpty(".")
+			if err != nil {
+				panic(err)
+			}
+			if !empty {
+				fmt.Println("This directory is not empty. Please create a new directory and run `jam init` there.")
+				os.Exit(1)
+			}
 			fmt.Print("Project Name (`<owner>/<project name>`): ")
 			var ownerProjectName string
 			fmt.Scan(&ownerProjectName)

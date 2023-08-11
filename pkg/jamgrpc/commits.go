@@ -1,14 +1,10 @@
 package jamgrpc
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"log"
-	"os"
 
 	"github.com/zdgeier/jam/gen/jampb"
-	"github.com/zdgeier/jam/pkg/fastcdc"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
 )
 
@@ -36,7 +32,13 @@ func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *jampb.GetProjec
 		return nil, errors.New("must be an owner or collaborator to get current commit")
 	}
 
-	commitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.ProjectId)
+	db, err := s.projectstore.GetLocalProjectDB(in.GetOwnerUsername(), in.GetProjectId())
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	commitId, err := s.projectstore.MaxCommitId(db, in.GetOwnerUsername(), in.ProjectId)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +48,7 @@ func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *jampb.GetProjec
 	}, err
 }
 
-func (s JamHub) ReadCommitChunkHashes(ctx context.Context, in *jampb.ReadCommitChunkHashesRequest) (*jampb.ReadCommitChunkHashesResponse, error) {
+func (s JamHub) ReadCommitFileHashes(ctx context.Context, in *jampb.ReadCommitFileHashesRequest) (*jampb.ReadCommitFileHashesResponse, error) {
 	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		if in.GetProjectId() != 1 {
@@ -71,62 +73,25 @@ func (s JamHub) ReadCommitChunkHashes(ctx context.Context, in *jampb.ReadCommitC
 		return nil, errors.New("must be an owner or collaborator to get current commit")
 	}
 
-	targetBuffer, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), in.GetCommitId(), in.GetPathHash())
+	db, err := s.projectstore.GetLocalProjectDB(in.GetOwnerUsername(), in.GetProjectId())
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	hashList, err := s.projectstore.ListCommitChunkHashes(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetCommitId(), in.GetPathHash())
 	if err != nil {
 		return nil, err
 	}
 
-	targetChunker, err := fastcdc.NewJamChunker(targetBuffer)
-	if err != nil {
-		return nil, err
+	hashes := make(map[uint64][]byte, 0)
+	for _, hash := range hashList {
+		hashes[hash.Hash] = nil
 	}
-	sig := make([]*jampb.ChunkHash, 0)
-	err = targetChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
-		sig = append(sig, ch)
-		return nil
-	})
-	return &jampb.ReadCommitChunkHashesResponse{
-		ChunkHashes: sig,
+
+	return &jampb.ReadCommitFileHashesResponse{
+		Hashes: hashes,
 	}, err
-}
-
-func (s JamHub) regenCommittedFile(ownerUsername string, projectId uint64, commitId uint64, pathHash []byte) (*bytes.Reader, error) {
-	var err error
-	var operationLocations *jampb.CommitOperationLocations
-	for i := int(commitId); i >= 0 && operationLocations == nil; i-- {
-		operationLocations, err = s.oplocstorecommit.ListOperationLocations(ownerUsername, projectId, uint64(i), pathHash)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if operationLocations == nil {
-		return bytes.NewReader([]byte{}), nil
-	}
-
-	ops := make(chan *jampb.Operation)
-	go func() {
-		for _, loc := range operationLocations.GetOpLocs() {
-			op, err := s.opdatastorecommit.Read(ownerUsername, projectId, pathHash, loc.GetOffset(), loc.GetLength())
-			if err != nil {
-				log.Panic(err)
-			}
-			ops <- op
-		}
-		close(ops)
-	}()
-
-	result := new(bytes.Buffer)
-	resultChunker, err := fastcdc.NewJamChunker(result)
-	if err != nil {
-		log.Panic(err)
-	}
-	targetBuffer := bytes.NewBuffer([]byte{})
-	err = resultChunker.ApplyDelta(result, bytes.NewReader(targetBuffer.Bytes()), ops)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	return bytes.NewReader(result.Bytes()), nil
 }
 
 func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.JamHub_ReadCommittedFileServer) error {
@@ -138,12 +103,13 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 	if in.GetOwnerUsername() == "" {
 		return errors.New("must provide owner id")
 	}
+
 	username, err := s.db.GetUsername(userId)
 	if err != nil {
 		return err
 	}
 
-	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), username)
+	accessible, err := s.ProjectIdAccessible(in.OwnerUsername, in.ProjectId, username)
 	if err != nil {
 		return err
 	}
@@ -152,60 +118,55 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 		return errors.New("not a collaborator or owner of this project")
 	}
 
-	commitId := in.GetCommitId()
-	if commitId == 0 {
-		maxCommitId, err := s.oplocstorecommit.MaxCommitId(in.GetOwnerUsername(), in.GetProjectId())
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		commitId = maxCommitId
+	db, err := s.projectstore.GetLocalProjectDB(in.GetOwnerUsername(), in.GetProjectId())
+	if err != nil {
+		return err
 	}
+	defer db.Close()
 
-	sourceBuffer, err := s.regenCommittedFile(in.GetOwnerUsername(), in.GetProjectId(), commitId, in.GetPathHash())
+	actualChunkHashes, err := s.projectstore.ListCommitChunkHashes(db, in.OwnerUsername, in.ProjectId, in.CommitId, in.PathHash)
 	if err != nil {
 		return err
 	}
 
-	sourceChunker, err := fastcdc.NewJamChunker(sourceBuffer)
+	conn, err := s.commitdatastore.GetLocalDB(in.OwnerUsername, in.ProjectId, in.PathHash)
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 
-	opsOut := make(chan *jampb.Operation)
-	tot := 0
-	go func() {
-		var blockCt, dataCt, bytes int
-		defer close(opsOut)
-		err := sourceChunker.CreateDelta(in.GetChunkHashes(), func(op *jampb.Operation) error {
-			tot += int(op.Chunk.GetLength()) + int(op.ChunkHash.GetLength())
-			switch op.Type {
-			case jampb.Operation_OpBlock:
-				blockCt++
-			case jampb.Operation_OpData:
-				b := make([]byte, len(op.Chunk.Data))
-				copy(b, op.Chunk.Data)
-				op.Chunk.Data = b
-				dataCt++
-				bytes += len(op.Chunk.Data)
+	for _, actualChunk := range actualChunkHashes {
+		if _, ok := in.LocalChunkHashes[actualChunk.Hash]; ok {
+			err = srv.Send(&jampb.FileReadOperation{
+				PathHash: in.PathHash,
+				Chunk: &jampb.Chunk{
+					Hash:   actualChunk.Hash,
+					Offset: actualChunk.Offset,
+					Length: actualChunk.Length,
+				},
+			})
+			if err != nil {
+				return err
 			}
-			opsOut <- op
-			return nil
-		})
-		if err != nil {
-			panic(err)
-		}
-	}()
-
-	for op := range opsOut {
-		err = srv.Send(&jampb.CommittedFileOperation{
-			ProjectId:     in.GetProjectId(),
-			OwnerUsername: in.GetOwnerUsername(),
-			PathHash:      in.GetPathHash(),
-			Op:            op,
-		})
-		if err != nil {
-			return err
+		} else {
+			data, err := s.commitdatastore.Read(conn, actualChunk.Hash)
+			if err != nil {
+				return err
+			}
+			err = srv.Send(&jampb.FileReadOperation{
+				PathHash: in.PathHash,
+				Chunk: &jampb.Chunk{
+					Hash:   actualChunk.Hash,
+					Offset: actualChunk.Offset,
+					Length: actualChunk.Length,
+					Data:   data,
+				},
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }

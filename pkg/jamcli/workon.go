@@ -45,7 +45,7 @@ func WorkOn() {
 	}
 
 	if state.CommitInfo == nil || state.WorkspaceInfo != nil {
-		// on commit
+		// on workspace
 		if os.Args[2] == "main" || os.Args[2] == "mainline" {
 			fileMetadata := ReadLocalFileList()
 			localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
@@ -74,6 +74,11 @@ func WorkOn() {
 			if err != nil {
 				log.Panic(err)
 			}
+			for key, val := range diffRemoteToLocalResp.GetDiffs() {
+				if val.Type != jampb.FileMetadataDiff_NoOp {
+					fmt.Println("Changed", key)
+				}
+			}
 
 			err = statefile.StateFile{
 				OwnerUsername: state.OwnerUsername,
@@ -87,8 +92,83 @@ func WorkOn() {
 			}
 			return
 		} else {
-			fmt.Println("Must be on mainline to `workon` a new workspace.")
-			os.Exit(1)
+			resp, err := apiClient.ListWorkspaces(ctx, &jampb.ListWorkspacesRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId})
+			if err != nil {
+				panic(err)
+			}
+
+			if workspaceId, ok := resp.GetWorkspaces()[os.Args[2]]; ok {
+				if state.WorkspaceInfo != nil && workspaceId == state.WorkspaceInfo.WorkspaceId {
+					fmt.Println("Already on", os.Args[2])
+					return
+				}
+
+				// Check to see if there are any local changes that haven't been pushed
+				fileMetadata := ReadLocalFileList()
+				localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+				if err != nil {
+					log.Panic(err)
+				}
+				if DiffHasChanges(localToRemoteDiff) {
+					fmt.Println("Some changes have occurred that have not been pushed. Push your changes before switching workspaces.")
+					os.Exit(1)
+				}
+
+				changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &jampb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: workspaceId})
+				if err != nil {
+					panic(err)
+				}
+
+				// if workspace already exists, do a pull
+				remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, fileMetadata)
+				if err != nil {
+					log.Panic(err)
+				}
+
+				if DiffHasChanges(remoteToLocalDiff) {
+					err = ApplyFileListDiffWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, remoteToLocalDiff)
+					if err != nil {
+						log.Panic(err)
+					}
+					for key, val := range remoteToLocalDiff.GetDiffs() {
+						if val.Type != jampb.FileMetadataDiff_NoOp {
+							fmt.Println("Changed", key)
+						}
+					}
+				}
+
+				err = statefile.StateFile{
+					OwnerUsername: state.OwnerUsername,
+					ProjectId:     state.ProjectId,
+					WorkspaceInfo: &statefile.WorkspaceInfo{
+						WorkspaceId: workspaceId,
+						ChangeId:    changeResp.ChangeId,
+					},
+				}.Save()
+				if err != nil {
+					panic(err)
+				}
+				return
+			} else {
+				// otherwise, just create a new workspace
+				resp, err := apiClient.CreateWorkspace(ctx, &jampb.CreateWorkspaceRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceName: os.Args[2]})
+				if err != nil {
+					log.Panic(err)
+				}
+
+				err = statefile.StateFile{
+					OwnerUsername: state.OwnerUsername,
+					ProjectId:     state.ProjectId,
+					WorkspaceInfo: &statefile.WorkspaceInfo{
+						WorkspaceId: resp.WorkspaceId,
+					},
+				}.Save()
+				if err != nil {
+					panic(err)
+				}
+				fmt.Println("Switched to new workspace", os.Args[2]+".")
+			}
+			return
 		}
 	}
 
@@ -121,7 +201,7 @@ func WorkOn() {
 			os.Exit(1)
 		}
 
-		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.TODO(), &jampb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: workspaceId})
+		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &jampb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: workspaceId})
 		if err != nil {
 			panic(err)
 		}
@@ -139,7 +219,7 @@ func WorkOn() {
 			}
 			for key, val := range remoteToLocalDiff.GetDiffs() {
 				if val.Type != jampb.FileMetadataDiff_NoOp {
-					fmt.Println("Pulled", key)
+					fmt.Println("Changed", key)
 				}
 			}
 		}
