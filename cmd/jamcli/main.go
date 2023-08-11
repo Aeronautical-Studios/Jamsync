@@ -36,6 +36,10 @@ func main() {
 		jamcli.Merge()
 	case os.Args[1] == "update":
 		jamcli.Update()
+	case os.Args[1] == "lock":
+		jamcli.Lock()
+	case os.Args[1] == "unlock":
+		jamcli.UnLock()
 	case os.Args[1] == "workon":
 		jamcli.WorkOn()
 	case os.Args[1] == "workspaces":

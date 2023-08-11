@@ -14,6 +14,13 @@ type JamHubDb struct {
 	db *sql.DB
 }
 
+type FileLock struct {
+	ProjectId uint64
+	Username string
+	B64EncodedPath string
+	IsDir    bool
+}
+
 func New() (jamhubDB JamHubDb) {
 	err := os.MkdirAll("./jamhubdata", os.ModePerm)
 	if err != nil {
@@ -28,6 +35,7 @@ func New() (jamhubDB JamHubDb) {
 	CREATE TABLE IF NOT EXISTS users (username TEXT, user_id TEXT, UNIQUE(username, user_id));
 	CREATE TABLE IF NOT EXISTS projects (name TEXT, owner_username TEXT, UNIQUE(name, owner_username));
 	CREATE TABLE IF NOT EXISTS collaborators (project_id INTEGER, username TEXT, UNIQUE(project_id, username));
+	CREATE TABLE IF NOT EXISTS filelocks (project_id INTEGER, username TEXT, file_hash TEXT, is_dir BOOL, UNIQUE(project_id, username, file_hash));
 	`
 	_, err = conn.Exec(sqlStmt)
 	if err != nil {
@@ -237,4 +245,52 @@ func (j JamHubDb) UserId(username string) (string, error) {
 	var userId string
 	err := row.Scan(&username)
 	return userId, err
+}
+
+func (j JamHubDb) CreateFileLock(projectId uint64, username string, b64EncodedPath string, isDir bool) error {
+	_, err := j.db.Exec("INSERT OR REPLACE INTO filelocks(project_id, username, file_hash, is_dir) VALUES(?, ?, ?, ?)", projectId, username, b64EncodedPath, isDir)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (j JamHubDb) GetFileLock(projectId uint64, username string, b64EncodedPath string) (bool, error) {
+	row := j.db.QueryRow("SELECT EXISTS(SELECT 1 FROM filelocks WHERE project_id = ? AND username = ? AND file_hash = ?)", projectId, username, b64EncodedPath)
+	if row.Err() != nil {
+		return false, row.Err()
+	}
+
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+func (j JamHubDb) ListFileLocks(projectId uint64) ([]FileLock, error) {
+	rows, err := j.db.Query("SELECT project_id, username, file_hash, is_dir FROM filelocks WHERE project_id = ?", projectId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := make([]FileLock, 0)
+	for rows.Next() {
+		u := FileLock{}
+		err = rows.Scan(&u.ProjectId, &u.Username, &u.B64EncodedPath, &u.IsDir)
+		if err != nil {
+			return nil, err
+		}
+		data = append(data, u)
+	}
+	return data, err
+}
+
+func (j JamHubDb) DeleteFileLock(projectId uint64, username string, b64EncodedPath string) error {
+	_, err := j.db.Exec("DELETE FROM filelocks WHERE project_id = ? AND username = ? AND file_hash = ?", projectId, username, b64EncodedPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

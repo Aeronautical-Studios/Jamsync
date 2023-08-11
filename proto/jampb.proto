@@ -34,6 +34,11 @@ service JamHub {
     rpc ListWorkspaceOperationLocations(ListWorkspaceOperationLocationsRequest) returns (WorkspaceOperationLocations);
     rpc WriteWorkspaceOperationsStream(stream WorkspaceFileOperation) returns (WriteOperationStreamResponse);
 
+    // Lock operations
+    rpc UpdateFileLock(UpdateFileLockRequest) returns (UpdateFileLockResponse);
+    rpc GetFileLock(GetFileLockRequest) returns (GetFileLockResponse);
+    rpc ListFileLocks(ListFileLocksRequest) returns (ListFileLocksResponse);
+
     // User operations
     rpc UserInfo(UserInfoRequest) returns (UserInfoResponse);
     rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
@@ -43,6 +48,45 @@ service JamHub {
 
 message PingRequest {}
 message Pong {}
+
+message GetFileLockRequest {
+    uint64 project_id = 1;
+    string owner_username = 2;
+    string b64_encoded_path = 3;
+    bool is_dir = 4;
+}
+
+message GetFileLockResponse {
+    bool is_locked = 1;
+}
+
+message UpdateFileLockRequest {
+    uint64 project_id = 1;
+    string owner_username = 2;
+    string b64_encoded_path = 3;
+    bool is_dir = 4;
+    bool lock_unlock_flag = 5;
+}
+
+message UpdateFileLockResponse {
+    bool is_locked = 1;
+}
+
+message ListFileLocksRequest {
+    uint64 project_id = 1;
+    string owner_username = 2;
+}
+
+message ListFileLocksResponse {
+    repeated FileLock locked_files = 1;
+}
+
+message FileLock {
+    uint64 project_id = 1;
+    string owner_username = 2;
+    string b64_encoded_path = 3;
+    bool is_dir = 4;
+}
 
 message GetWorkspaceNameRequest {
     uint64 project_id = 1;
