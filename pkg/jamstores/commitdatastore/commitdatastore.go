@@ -14,6 +14,12 @@ func NewLocalStore() *LocalStore {
 	return &LocalStore{}
 }
 
+// LocalDBExists checks if the local database exists.
+func (s *LocalStore) LocalDBExists(ownerUsername string, projectId uint64, pathHash []byte) bool {
+	_, err := os.Stat(s.filePath(ownerUsername, projectId, pathHash))
+	return err == nil
+}
+
 func (s *LocalStore) GetLocalDB(ownerUsername string, projectId uint64, pathHash []byte) (*sql.DB, error) {
 	err := os.MkdirAll(s.fileDir(ownerUsername, projectId, pathHash), os.ModePerm)
 	if err != nil {

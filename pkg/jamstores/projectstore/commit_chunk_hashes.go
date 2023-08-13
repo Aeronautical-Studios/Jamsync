@@ -7,7 +7,7 @@ import (
 	"github.com/zdgeier/jam/gen/jampb"
 )
 
-func (s *LocalStore) ListChangedPathHashesFromCommit(db *sql.DB, ownerUsername string, projectId, commitId uint64) (map[string]interface{}, error) {
+func (s *LocalStore) ListChangedPathHashesFromCommit(db *sql.DB, commitId uint64) (map[string]interface{}, error) {
 	rows, err := db.Query("SELECT DISTINCT path_hash FROM commit_chunk_hashes WHERE rowid > ?", commitId)
 	if err != nil {
 		return nil, err
@@ -27,7 +27,7 @@ func (s *LocalStore) ListChangedPathHashesFromCommit(db *sql.DB, ownerUsername s
 	return pathHashes, nil
 }
 
-func (s *LocalStore) InsertCommitChunkHashes(db *sql.DB, ownerUsername string, projectId, commitId uint64, pathHash []byte, chunkHashes []*jampb.ChunkHash) error {
+func (s *LocalStore) InsertCommitChunkHashes(db *sql.DB, commitId uint64, pathHash []byte, chunkHashes []*jampb.ChunkHash) error {
 	insertStmt, err := db.Prepare("INSERT INTO commit_chunk_hashes (commit_id, path_hash, hash, offset, length) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (s *LocalStore) InsertCommitChunkHashes(db *sql.DB, ownerUsername string, p
 	return nil
 }
 
-func (s *LocalStore) ListCommitChunkHashes(db *sql.DB, ownerUsername string, projectId uint64, commitId uint64, pathHash []byte) ([]*jampb.ChunkHash, error) {
+func (s *LocalStore) ListCommitChunkHashes(db *sql.DB, commitId uint64, pathHash []byte) ([]*jampb.ChunkHash, error) {
 	rows, err := db.Query(`
 		SELECT hash, offset, length FROM commit_chunk_hashes
 		WHERE commit_id = (

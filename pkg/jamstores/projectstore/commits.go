@@ -2,7 +2,7 @@ package projectstore
 
 import "database/sql"
 
-func (s *LocalStore) AddCommit(db *sql.DB, ownerUsername string, projectId uint64) (uint64, error) {
+func (s *LocalStore) AddCommit(db *sql.DB) (uint64, error) {
 	res, err := db.Exec("INSERT INTO commits (timestamp) VALUES (datetime('now'))")
 	if err != nil {
 		return 0, err
@@ -16,7 +16,7 @@ func (s *LocalStore) AddCommit(db *sql.DB, ownerUsername string, projectId uint6
 	return uint64(r), err
 }
 
-func (s *LocalStore) MaxCommitId(db *sql.DB, ownerUsername string, projectId uint64) (uint64, error) {
+func (s *LocalStore) MaxCommitId(db *sql.DB) (uint64, error) {
 	row := db.QueryRow("SELECT MAX(rowid) FROM commits")
 	if row.Err() != nil {
 		return 0, row.Err()

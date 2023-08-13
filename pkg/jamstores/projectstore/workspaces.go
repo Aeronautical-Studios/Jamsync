@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-func (s *LocalStore) GetWorkspaceNameById(db *sql.DB, ownerUsername string, projectId uint64, workspaceId uint64) (string, error) {
+func (s *LocalStore) GetWorkspaceNameById(db *sql.DB, workspaceId uint64) (string, error) {
 	row := db.QueryRow("SELECT name FROM workspaces WHERE rowid = ?", workspaceId)
 	if row.Err() != nil {
 		return "", row.Err()
@@ -19,7 +19,7 @@ func (s *LocalStore) GetWorkspaceNameById(db *sql.DB, ownerUsername string, proj
 	return name, err
 }
 
-func (s *LocalStore) GetWorkspaceIdByName(db *sql.DB, ownerUsername string, projectId uint64, workspaceName string) (uint64, error) {
+func (s *LocalStore) GetWorkspaceIdByName(db *sql.DB, workspaceName string) (uint64, error) {
 	row := db.QueryRow("SELECT rowid FROM workspaces WHERE name = ?", workspaceName)
 	if row.Err() != nil {
 		return 0, row.Err()
@@ -33,7 +33,7 @@ func (s *LocalStore) GetWorkspaceIdByName(db *sql.DB, ownerUsername string, proj
 	return workspaceId, err
 }
 
-func (s *LocalStore) GetWorkspaceBaseCommitId(db *sql.DB, ownerUsername string, projectId uint64, workspaceId uint64) (uint64, error) {
+func (s *LocalStore) GetWorkspaceBaseCommitId(db *sql.DB, workspaceId uint64) (uint64, error) {
 	row := db.QueryRow("SELECT baseCommitId FROM workspaces WHERE rowid = ?", workspaceId)
 	if row.Err() != nil {
 		return 0, row.Err()
@@ -47,7 +47,7 @@ func (s *LocalStore) GetWorkspaceBaseCommitId(db *sql.DB, ownerUsername string, 
 	return commitId, err
 }
 
-func (s *LocalStore) DeleteWorkspace(db *sql.DB, ownerUsername string, projectId uint64, workspaceId uint64) error {
+func (s *LocalStore) DeleteWorkspace(db *sql.DB, workspaceId uint64) error {
 	_, err := db.Exec("UPDATE workspaces SET deleted = 1 WHERE rowid = ?", workspaceId)
 	if err != nil {
 		return err
@@ -56,7 +56,7 @@ func (s *LocalStore) DeleteWorkspace(db *sql.DB, ownerUsername string, projectId
 	return err
 }
 
-func (s *LocalStore) UpdateWorkspaceBaseCommit(db *sql.DB, ownerUsername string, projectId uint64, workspaceId uint64, baseCommitId uint64) error {
+func (s *LocalStore) UpdateWorkspaceBaseCommit(db *sql.DB, workspaceId uint64, baseCommitId uint64) error {
 	_, err := db.Exec("UPDATE workspaces SET baseCommitId = ? WHERE rowid = ?", baseCommitId, workspaceId)
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (s *LocalStore) UpdateWorkspaceBaseCommit(db *sql.DB, ownerUsername string,
 	return err
 }
 
-func (s *LocalStore) AddWorkspace(db *sql.DB, ownerUsername string, projectId uint64, workspaceName string, baseCommitId uint64) (uint64, error) {
+func (s *LocalStore) AddWorkspace(db *sql.DB, workspaceName string, baseCommitId uint64) (uint64, error) {
 	res, err := db.Exec("INSERT INTO workspaces(name, baseCommitId, deleted) VALUES(?, ?, 0)", workspaceName, baseCommitId)
 	if err != nil {
 		return 0, err
@@ -84,7 +84,7 @@ func (s *LocalStore) AddWorkspace(db *sql.DB, ownerUsername string, projectId ui
 	return uint64(rowId), err
 }
 
-func (s *LocalStore) ListWorkspaces(db *sql.DB, ownerUsername string, projectId uint64) (map[string]uint64, error) {
+func (s *LocalStore) ListWorkspaces(db *sql.DB) (map[string]uint64, error) {
 	rows, err := db.Query("SELECT rowid, name FROM workspaces WHERE deleted = 0")
 	if err != nil {
 		return nil, err

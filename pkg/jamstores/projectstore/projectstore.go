@@ -35,6 +35,9 @@ func (s *LocalStore) GetLocalProjectDB(ownerUsername string, projectId uint64) (
 	CREATE TABLE IF NOT EXISTS workspaces (name TEXT, baseCommitId INTEGER, deleted INTEGER, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
 	CREATE TABLE IF NOT EXISTS changes (change_id INTEGER, workspace_id INTEGER, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
 	CREATE TABLE IF NOT EXISTS workspace_chunk_hashes (workspace_id INTEGER, change_id INTEGER, path_hash BLOB, hash TEXT, offset INTEGER, length INTEGER);
+
+	CREATE INDEX IF NOT EXISTS workspace_chunk_hashes_desc ON workspace_chunk_hashes(change_id DESC, path_hash, workspace_id);
+	CREATE INDEX IF NOT EXISTS commit_chunk_hashes_desc ON commit_chunk_hashes(commit_id DESC, path_hash);
 	`
 	_, err = conn.Exec(sqlStmt)
 	if err != nil {

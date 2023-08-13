@@ -12,8 +12,9 @@ import (
 )
 
 var DefaultOpts = Options{
-	AverageSize: 1024,
+	AverageSize: miB,
 	Seed:        84372,
+	MaxSize:     miB*4 - kiB,
 }
 
 const (
@@ -91,16 +92,8 @@ func (opts *Options) setDefaults() {
 	}
 }
 
-func NewJamChunker(rd io.Reader) (*Chunker, error) {
-	return NewChunker(rd, Options{
-		AverageSize: miB,
-		Seed:        84372,
-		MaxSize:     miB*4 - kiB,
-	})
-}
-
 // NewChunker returns a Chunker with the given Options.
-func NewChunker(rd io.Reader, opts Options) (*Chunker, error) {
+func NewJamChunker(opts Options) (*Chunker, error) {
 	opts.setDefaults()
 	if err := opts.validate(); err != nil {
 		return nil, err
@@ -124,12 +117,29 @@ func NewChunker(rd io.Reader, opts Options) (*Chunker, error) {
 		normSize: opts.AverageSize,
 		maskS:    (1 << smallBits) - 1,
 		maskL:    (1 << largeBits) - 1,
-		rd:       rd,
 		buf:      make([]byte, opts.BufSize),
 		cursor:   opts.BufSize,
 	}
 
 	return chunker, nil
+}
+
+func (c *Chunker) SetChunkerReader(rd io.Reader) {
+	normalization := 2
+	bits := int(math.Round(math.Log2(float64(c.normSize))))
+	smallBits := bits + normalization
+	largeBits := bits - normalization
+	// Optimization to reuse buffer
+	*c = Chunker{
+		minSize:  c.minSize,
+		maxSize:  c.maxSize,
+		normSize: c.normSize,
+		maskS:    (1 << smallBits) - 1,
+		maskL:    (1 << largeBits) - 1,
+		buf:      c.buf[:cap(c.buf)],
+		cursor:   c.maxSize * 2,
+		rd:       rd,
+	}
 }
 
 func (c *Chunker) fillBuffer() error {

@@ -38,7 +38,7 @@ func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *jampb.GetProjec
 	}
 	defer db.Close()
 
-	commitId, err := s.projectstore.MaxCommitId(db, in.GetOwnerUsername(), in.ProjectId)
+	commitId, err := s.projectstore.MaxCommitId(db)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (s JamHub) ReadCommitFileHashes(ctx context.Context, in *jampb.ReadCommitFi
 	}
 	defer db.Close()
 
-	hashList, err := s.projectstore.ListCommitChunkHashes(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetCommitId(), in.GetPathHash())
+	hashList, err := s.projectstore.ListCommitChunkHashes(db, in.GetCommitId(), in.GetPathHash())
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 	}
 	defer db.Close()
 
-	actualChunkHashes, err := s.projectstore.ListCommitChunkHashes(db, in.OwnerUsername, in.ProjectId, in.CommitId, in.PathHash)
+	actualChunkHashes, err := s.projectstore.ListCommitChunkHashes(db, in.CommitId, in.PathHash)
 	if err != nil {
 		return err
 	}

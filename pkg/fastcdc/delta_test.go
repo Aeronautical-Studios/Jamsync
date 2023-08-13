@@ -120,16 +120,18 @@ func Test_GenData(t *testing.T) {
 		targetBuffer := bytes.NewReader(p.Target.Data)
 
 		sig := make(map[uint64][]byte, 10)
-		sourceChunker, err := NewChunker(sourceBuffer, Options{
+		sourceChunker, err := NewJamChunker(Options{
 			AverageSize: 1024 * 64,
 			Seed:        84372,
 		})
 		assertNoError(t, err)
-		targetChunker, err := NewChunker(targetBuffer, Options{
+		sourceChunker.SetChunkerReader(sourceBuffer)
+		targetChunker, err := NewJamChunker(Options{
 			AverageSize: 1024 * 64,
 			Seed:        84372,
 		})
 		assertNoError(t, err)
+		targetChunker.SetChunkerReader(targetBuffer)
 
 		err = targetChunker.CreateSignature(func(ch *jampb.ChunkHash) error {
 			sig[ch.GetHash()] = nil

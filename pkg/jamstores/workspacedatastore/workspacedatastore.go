@@ -22,6 +22,11 @@ func (s *LocalStore) fileDir(ownerId string, projectId, workspaceId uint64, path
 	return fmt.Sprintf("jamdata/%s/%d/workspacedatastore/%d/%02X", ownerId, projectId, workspaceId, pathHash[:1])
 }
 
+func (s *LocalStore) LocalDBExists(ownerUsername string, projectId uint64, workspaceId uint64, pathHash []byte) bool {
+	_, err := os.Stat(s.filePath(ownerUsername, projectId, workspaceId, pathHash))
+	return err == nil
+}
+
 func (s *LocalStore) GetLocalDB(ownerUsername string, projectId uint64, workspaceId uint64, pathHash []byte) (*sql.DB, error) {
 	err := os.MkdirAll(s.fileDir(ownerUsername, projectId, workspaceId, pathHash), os.ModePerm)
 	if err != nil {

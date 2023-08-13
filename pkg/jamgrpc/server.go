@@ -1,6 +1,7 @@
 package jamgrpc
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"net"
 	"os"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamenv"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
@@ -19,10 +22,12 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 type JamHub struct {
@@ -40,6 +45,24 @@ func Hostname() string {
 	return jamsite.Site().String() + "-" + jamenv.Env().String() + "-jamhubgrpc.jamhub.dev:443"
 }
 
+func interceptorLogger(l *log.Logger) logging.Logger {
+	return logging.LoggerFunc(func(_ context.Context, lvl logging.Level, msg string, fields ...any) {
+		switch lvl {
+		case logging.LevelDebug:
+			msg = fmt.Sprintf("DEBUG :%v", msg)
+		case logging.LevelInfo:
+			msg = fmt.Sprintf("INFO :%v", msg)
+		case logging.LevelWarn:
+			msg = fmt.Sprintf("WARN :%v", msg)
+		case logging.LevelError:
+			msg = fmt.Sprintf("ERROR :%v", msg)
+		default:
+			panic(fmt.Sprintf("unknown level %v", lvl))
+		}
+		l.Println(append([]any{"msg", msg}, fields...))
+	})
+}
+
 func New() (closer func(), err error) {
 	jamhub := JamHub{
 		db:                 jamdb.NewLocalStore(),
@@ -48,8 +71,29 @@ func New() (closer func(), err error) {
 		projectstore:       projectstore.NewLocalStore(),
 	}
 
+	var customFunc recovery.RecoveryHandlerFunc = func(p any) (err error) {
+		return status.Errorf(codes.Unknown, "panic triggered: %v", p)
+	}
+
+	logger := log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lshortfile)
+
+	loggerOpts := []logging.Option{
+		logging.WithLogOnEvents(logging.StartCall, logging.FinishCall),
+		// Add any other option (check functions starting with logging.With).
+	}
+
+	// Shared options for the logger, with a custom gRPC code to log level function.
+	recoverOpts := []recovery.Option{
+		recovery.WithRecoveryHandler(customFunc),
+	}
+
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(serverauth.EnsureValidToken),
+		grpc.ChainUnaryInterceptor(
+			// Order matters e.g. tracing interceptor have to create span first for the later exemplars to work.
+			logging.UnaryServerInterceptor(interceptorLogger(logger), loggerOpts...),
+			recovery.UnaryServerInterceptor(recoverOpts...),
+		),
 	}
 
 	var host string

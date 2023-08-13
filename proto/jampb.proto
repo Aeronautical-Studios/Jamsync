@@ -25,11 +25,11 @@ service JamHub {
     // File operations
     rpc ReadCommitFileHashes(ReadCommitFileHashesRequest) returns (ReadCommitFileHashesResponse);
     rpc ReadCommittedFile(ReadCommittedFileRequest) returns (stream FileReadOperation);
-    rpc ReadWorkspaceFileHashes(ReadWorkspaceFileHashesRequest) returns (stream HashList);
+    rpc ReadWorkspaceFileHashes(ReadWorkspaceFileHashesRequest) returns (ReadWorkspaceFileHashesResponse);
     rpc ReadWorkspaceFile(ReadWorkspaceFileRequest) returns (stream FileReadOperation);
     rpc AddChange(AddChangeRequest) returns (AddChangeResponse);
     rpc MergeWorkspace(MergeWorkspaceRequest) returns (MergeWorkspaceResponse);
-    rpc WriteWorkspaceOperationsStream(stream FileWriteOperation) returns (WriteOperationStreamResponse);
+    rpc WriteWorkspaceOperationsStream(stream BatchedFileWriteOperation) returns (WriteOperationStreamResponse);
     rpc GetOperationStreamToken(GetOperationStreamTokenRequest) returns (GetOperationStreamTokenResponse);
 
     // Lock operations
@@ -221,8 +221,12 @@ message ListWorkspacesResponse {
     map<uint64, uint64> baseCommitIds = 2;
 }
 
-message FileWriteOperation {
+message BatchedFileWriteOperation {
     bytes operation_token = 1;
+    repeated FileWriteOperation operations = 2;
+}
+
+message FileWriteOperation {
     bytes path_hash = 2;
     Chunk chunk = 3;
 }
@@ -348,6 +352,10 @@ message ReadWorkspaceFileRequest {
 message HashList {
     bytes path_hash = 1;
     map<uint64, bytes> hashes = 2;
+}
+
+message ReadWorkspaceFileHashesResponse {
+    repeated HashList hashes = 1;
 }
 
 message ReadWorkspaceFileHashesRequest {

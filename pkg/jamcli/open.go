@@ -17,10 +17,31 @@ func Open() {
 	url := "https://jamhub.dev/"
 	if jamenv.Env() == jamenv.Local {
 		url = "http://localhost/"
+		_, err := statefile.Find()
+		if err != nil {
+			err = browser.OpenURL(url)
+			if err != nil {
+				panic(err)
+			}
+		}
 	} else if jamenv.Env() == jamenv.Staging {
 		url = "https://staging.jamhub.dev/"
+		_, err := statefile.Find()
+		if err != nil {
+			err = browser.OpenURL(url)
+			if err != nil {
+				panic(err)
+			}
+		}
 	} else if jamsite.Site() == jamsite.USWest2 {
 		url = "https://west.jamhub.dev/"
+		_, err := statefile.Find()
+		if err != nil {
+			err = browser.OpenURL(url)
+			if err != nil {
+				panic(err)
+			}
+		}
 	}
 
 	authFile, err := authfile.Authorize()
@@ -40,10 +61,11 @@ func Open() {
 
 	state, err := statefile.Find()
 	if err != nil {
-		err = browser.OpenURL(url + username + "/")
+		err = browser.OpenURL(url + username + "/projects")
 		if err != nil {
 			panic(err)
 		}
+		return
 	}
 
 	nameResp, err := apiClient.GetProjectName(context.Background(), &jampb.GetProjectNameRequest{

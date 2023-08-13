@@ -7,10 +7,8 @@ import (
 	"database/sql"
 	"errors"
 	"io"
-	"log"
 	"os"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/fastcdc"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
@@ -46,12 +44,12 @@ func (s JamHub) CreateWorkspace(ctx context.Context, in *jampb.CreateWorkspaceRe
 	}
 	defer db.Close()
 
-	maxCommitId, err := s.projectstore.MaxCommitId(db, in.GetOwnerUsername(), in.GetProjectId())
+	maxCommitId, err := s.projectstore.MaxCommitId(db)
 	if err != nil {
 		return nil, err
 	}
 
-	workspaceId, err := s.projectstore.AddWorkspace(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceName(), maxCommitId)
+	workspaceId, err := s.projectstore.AddWorkspace(db, in.GetWorkspaceName(), maxCommitId)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +84,7 @@ func (s JamHub) GetWorkspaceName(ctx context.Context, in *jampb.GetWorkspaceName
 	}
 	defer db.Close()
 
-	workspaceName, err := s.projectstore.GetWorkspaceNameById(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	workspaceName, err := s.projectstore.GetWorkspaceNameById(db, in.GetWorkspaceId())
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +119,7 @@ func (s JamHub) GetWorkspaceId(ctx context.Context, in *jampb.GetWorkspaceIdRequ
 	}
 	defer db.Close()
 
-	workspaceId, err := s.projectstore.GetWorkspaceIdByName(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceName())
+	workspaceId, err := s.projectstore.GetWorkspaceIdByName(db, in.GetWorkspaceName())
 	if err != nil {
 		return nil, err
 	}
@@ -192,14 +190,14 @@ func (s JamHub) ListWorkspaces(ctx context.Context, in *jampb.ListWorkspacesRequ
 	}
 	defer db.Close()
 
-	workspaces, err := s.projectstore.ListWorkspaces(db, in.GetOwnerUsername(), in.GetProjectId())
+	workspaces, err := s.projectstore.ListWorkspaces(db)
 	if err != nil {
 		return nil, err
 	}
 
 	baseCommitIds := make(map[uint64]uint64)
 	for _, workspaceId := range workspaces {
-		baseCommitId, err := s.projectstore.GetWorkspaceBaseCommitId(db, in.GetOwnerUsername(), in.GetProjectId(), workspaceId)
+		baseCommitId, err := s.projectstore.GetWorkspaceBaseCommitId(db, workspaceId)
 		if err != nil {
 			return nil, err
 		}
@@ -269,18 +267,7 @@ func (s JamHub) WriteWorkspaceOperationsStream(srv jampb.JamHub_WriteWorkspaceOp
 		return err
 	}
 
-	cache, err := lru.NewWithEvict(256, func(path string, conn *sql.DB) {
-		err := conn.Close()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-	})
-	if err != nil {
-		return err
-	}
-
-	pathHashToChunkHashes := make(map[string][]*jampb.ChunkHash, 0)
+	var projectDB *sql.DB
 	for {
 		in, err := srv.Recv()
 		if err == io.EOF {
@@ -298,139 +285,119 @@ func (s JamHub) WriteWorkspaceOperationsStream(srv jampb.JamHub_WriteWorkspaceOp
 			if err != nil {
 				return err
 			}
-		}
-
-		if in.Chunk.Data != nil {
-			var conn *sql.DB
-			if cache.Contains(string(in.PathHash)) {
-				conn, _ = cache.Get(string(in.PathHash))
-			} else {
-				conn, err = s.workspacedatastore.GetLocalDB(projectOwner, projectId, workspaceId, in.PathHash)
-				if err != nil {
-					return err
-				}
-				defer conn.Close()
-				cache.Add(string(in.PathHash), conn)
-			}
-
-			err = s.workspacedatastore.Write(conn, in.Chunk.Hash, in.Chunk.Data)
+			projectDB, err = s.projectstore.GetLocalProjectDB(projectOwner, projectId)
 			if err != nil {
 				return err
 			}
+			defer projectDB.Close()
 		}
 
-		pathHashToChunkHashes[string(in.PathHash)] = append(pathHashToChunkHashes[string(in.PathHash)], &jampb.ChunkHash{
-			Hash:   in.Chunk.Hash,
-			Offset: in.Chunk.Offset,
-			Length: in.Chunk.Length,
-		})
-	}
+		for _, op := range in.Operations {
+			if op.Chunk != nil {
+				conn, err := s.workspacedatastore.GetLocalDB(projectOwner, projectId, workspaceId, op.PathHash)
+				if err != nil {
+					return err
+				}
+				err = s.workspacedatastore.Write(conn, op.Chunk.Hash, op.Chunk.Data)
+				if err != nil {
+					return err
+				}
+				err = conn.Close()
+				if err != nil {
+					return err
+				}
+			}
 
-	db, err := s.projectstore.GetLocalProjectDB(projectOwner, projectId)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	for k, v := range pathHashToChunkHashes {
-		err = s.projectstore.InsertWorkspaceChunkHashes(db, projectOwner, projectId, workspaceId, changeId, []byte(k), v)
-		if err != nil {
-			return err
+			err = s.projectstore.InsertWorkspaceChunkHash(projectDB, workspaceId, changeId, op.PathHash, &jampb.ChunkHash{
+				Hash:   op.Chunk.Hash,
+				Offset: op.Chunk.Offset,
+				Length: op.Chunk.Length,
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	return srv.SendAndClose(&jampb.WriteOperationStreamResponse{})
 }
 
-func (s JamHub) ReadWorkspaceFileHashes(in *jampb.ReadWorkspaceFileHashesRequest, srv jampb.JamHub_ReadWorkspaceFileHashesServer) error {
-	userId, err := serverauth.ParseIdFromCtx(srv.Context())
+func (s JamHub) ReadWorkspaceFileHashes(ctx context.Context, in *jampb.ReadWorkspaceFileHashesRequest) (*jampb.ReadWorkspaceFileHashesResponse, error) {
+	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	currentUsername, err := s.db.GetUsername(userId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), currentUsername)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !accessible {
-		return errors.New("not an owner or collaborator of this project")
+		return nil, errors.New("not an owner or collaborator of this project")
 	}
 
-	worker := func(pathHashes <-chan []byte, results chan<- *jampb.HashList) {
-		for pathHash := range pathHashes {
-			workspaceConn, err := s.workspacedatastore.GetLocalDB(in.OwnerUsername, in.ProjectId, in.WorkspaceId, pathHash)
-			if err != nil {
-				panic(err)
-			}
-
-			commitConn, err := s.commitdatastore.GetLocalDB(in.OwnerUsername, in.ProjectId, pathHash)
-			if err != nil {
-				panic(err)
-			}
-
-			hashList, err := s.workspacedatastore.GetChunkHashes(workspaceConn, pathHash)
-			if err != nil {
-				panic(err)
-			}
-
-			committedHashList, err := s.commitdatastore.GetChunkHashes(commitConn, pathHash)
-			if err != nil {
-				panic(err)
-			}
-
-			hashMap := make(map[uint64][]byte)
-			for _, hash := range hashList {
-				hashMap[hash] = nil
-			}
-			for _, hash := range committedHashList {
-				hashMap[hash] = nil
-			}
-
-			err = workspaceConn.Close()
-			if err != nil {
-				panic(err)
-			}
-			err = commitConn.Close()
-			if err != nil {
-				panic(err)
-			}
-
-			results <- &jampb.HashList{
+	hashLists := make([]*jampb.HashList, 0, len(in.PathHashes))
+	for _, pathHash := range in.PathHashes {
+		// optimization: check if files exists, if not, return empty hash list
+		if !s.workspacedatastore.LocalDBExists(in.OwnerUsername, in.ProjectId, in.WorkspaceId, pathHash) && !s.commitdatastore.LocalDBExists(in.OwnerUsername, in.ProjectId, pathHash) {
+			hashLists = append(hashLists, &jampb.HashList{
 				PathHash: pathHash,
-				Hashes:   hashMap,
-			}
+			})
+			continue
 		}
-	}
 
-	pathHashes := make(chan []byte, len(in.PathHashes))
-	results := make(chan *jampb.HashList, len(in.PathHashes))
-
-	for w := 1; w < 64 && w <= len(in.PathHashes)/10+1; w++ {
-		go worker(pathHashes, results)
-	}
-
-	go func() {
-		for _, pathHash := range in.PathHashes {
-			pathHashes <- pathHash
-		}
-		close(pathHashes)
-	}()
-
-	for i := 0; i < len(in.PathHashes); i++ {
-		hashList := <-results
-		err := srv.Send(hashList)
+		workspaceConn, err := s.workspacedatastore.GetLocalDB(in.OwnerUsername, in.ProjectId, in.WorkspaceId, pathHash)
 		if err != nil {
-			return err
+			panic(err)
 		}
+
+		commitConn, err := s.commitdatastore.GetLocalDB(in.OwnerUsername, in.ProjectId, pathHash)
+		if err != nil {
+			panic(err)
+		}
+
+		hashList, err := s.workspacedatastore.GetChunkHashes(workspaceConn, pathHash)
+		if err != nil {
+			panic(err)
+		}
+
+		committedHashList, err := s.commitdatastore.GetChunkHashes(commitConn, pathHash)
+		if err != nil {
+			panic(err)
+		}
+
+		hashMap := make(map[uint64][]byte)
+		for _, hash := range hashList {
+			hashMap[hash] = nil
+		}
+		for _, hash := range committedHashList {
+			hashMap[hash] = nil
+		}
+
+		err = workspaceConn.Close()
+		if err != nil {
+			panic(err)
+		}
+		err = commitConn.Close()
+		if err != nil {
+			panic(err)
+		}
+
+		hashLists = append(hashLists, &jampb.HashList{
+			PathHash: pathHash,
+			Hashes:   hashMap,
+		})
 	}
 
-	return nil
+	return &jampb.ReadWorkspaceFileHashesResponse{
+		Hashes: hashLists,
+	}, nil
 }
 
 func (s JamHub) ReadWorkspaceFile(in *jampb.ReadWorkspaceFileRequest, srv jampb.JamHub_ReadWorkspaceFileServer) error {
@@ -459,7 +426,7 @@ func (s JamHub) ReadWorkspaceFile(in *jampb.ReadWorkspaceFileRequest, srv jampb.
 	}
 	defer db.Close()
 
-	chunkHashes, err := s.projectstore.ListWorkspaceChunkHashes(db, in.OwnerUsername, in.ProjectId, in.WorkspaceId, in.ChangeId, in.PathHash)
+	chunkHashes, err := s.projectstore.ListWorkspaceChunkHashes(db, in.WorkspaceId, in.ChangeId, in.PathHash)
 	if err != nil {
 		return err
 	}
@@ -550,12 +517,12 @@ func (s JamHub) DeleteWorkspace(ctx context.Context, in *jampb.DeleteWorkspaceRe
 	}
 	defer db.Close()
 
-	err = s.projectstore.DeleteWorkspace(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	err = s.projectstore.DeleteWorkspace(db, in.GetWorkspaceId())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
 
-	err = s.projectstore.DeleteWorkspace(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	err = s.projectstore.DeleteWorkspace(db, in.GetWorkspaceId())
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +531,7 @@ func (s JamHub) DeleteWorkspace(ctx context.Context, in *jampb.DeleteWorkspaceRe
 }
 
 func (s JamHub) regenCommittedFile(db *sql.DB, ownerUsername string, projectId, commitId uint64, pathHash []byte, file *bytes.Buffer) error {
-	chunkHashes, err := s.projectstore.ListCommitChunkHashes(db, ownerUsername, projectId, commitId, pathHash)
+	chunkHashes, err := s.projectstore.ListCommitChunkHashes(db, commitId, pathHash)
 	if err != nil {
 		return err
 	}
@@ -596,7 +563,7 @@ func (s JamHub) regenCommittedFile(db *sql.DB, ownerUsername string, projectId, 
 }
 
 func (s JamHub) regenWorkspaceFile(db *sql.DB, ownerUsername string, projectId, workspaceId, changeId uint64, pathHash []byte, file *bytes.Buffer) error {
-	chunkHashes, err := s.projectstore.ListWorkspaceChunkHashes(db, ownerUsername, projectId, workspaceId, changeId, pathHash)
+	chunkHashes, err := s.projectstore.ListWorkspaceChunkHashes(db, workspaceId, changeId, pathHash)
 	if err != nil {
 		return err
 	}
@@ -668,17 +635,17 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *jampb.UpdateWorkspaceRe
 		return nil, err
 	}
 	defer db.Close()
-	changedWorkspacePathHashes, err := s.projectstore.ListWorkspaceChangedPathHashes(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	changedWorkspacePathHashes, err := s.projectstore.ListWorkspaceChangedPathHashes(db, in.GetWorkspaceId())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
 
-	workspaceBaseCommitId, err := s.projectstore.GetWorkspaceBaseCommitId(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	workspaceBaseCommitId, err := s.projectstore.GetWorkspaceBaseCommitId(db, in.GetWorkspaceId())
 	if err != nil {
 		return nil, err
 	}
 
-	maxCommitId, err := s.projectstore.MaxCommitId(db, in.GetOwnerUsername(), in.GetProjectId())
+	maxCommitId, err := s.projectstore.MaxCommitId(db)
 	if err != nil {
 		return nil, err
 	}
@@ -687,7 +654,7 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *jampb.UpdateWorkspaceRe
 		return nil, errors.New("already up-to-date")
 	}
 
-	changedCommitPathHashes, err := s.projectstore.ListChangedPathHashesFromCommit(db, in.GetOwnerUsername(), in.GetProjectId(), workspaceBaseCommitId)
+	changedCommitPathHashes, err := s.projectstore.ListChangedPathHashesFromCommit(db, workspaceBaseCommitId)
 	if err != nil {
 		return nil, err
 	}
@@ -735,6 +702,10 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *jampb.UpdateWorkspaceRe
 	workspaceFile := bytes.NewBuffer([]byte{})
 	conflicts := make([]string, 0)
 	makeDiff := func(pathHashes <-chan []byte, results chan<- error) {
+		newChunker, err := fastcdc.NewJamChunker(fastcdc.DefaultOpts)
+		if err != nil {
+			results <- err
+		}
 		for pathHash := range pathHashes {
 			var newContent *bytes.Reader
 			if bytes.Equal(pathHash, file.PathToHash(".jamfilelist")) {
@@ -788,12 +759,7 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *jampb.UpdateWorkspaceRe
 
 				newContent = mergedFile
 			}
-
-			newChunker, err := fastcdc.NewJamChunker(newContent)
-			if err != nil {
-				results <- err
-				continue
-			}
+			newChunker.SetChunkerReader(newContent)
 
 			newChunks := make([]*jampb.Chunk, 0)
 			err = newChunker.CreateDelta(nil, func(chunk *jampb.Chunk) error {
@@ -834,7 +800,7 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *jampb.UpdateWorkspaceRe
 			commitConn.Close()
 			workspaceConn.Close()
 
-			err = s.projectstore.InsertWorkspaceChunkHashes(db, in.GetOwnerUsername(), in.GetProjectId(), in.WorkspaceId, newChangeId, pathHash, newChunkHashes)
+			err = s.projectstore.InsertWorkspaceChunkHashes(db, in.WorkspaceId, newChangeId, pathHash, newChunkHashes)
 			if err != nil {
 				results <- err
 				continue
@@ -879,7 +845,7 @@ func (s JamHub) UpdateWorkspace(ctx context.Context, in *jampb.UpdateWorkspaceRe
 		}
 	}
 
-	err = s.projectstore.UpdateWorkspaceBaseCommit(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxCommitId)
+	err = s.projectstore.UpdateWorkspaceBaseCommit(db, in.GetWorkspaceId(), maxCommitId)
 	if err != nil {
 		return nil, err
 	}
@@ -953,12 +919,12 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 	}
 	defer db.Close()
 
-	baseCommitId, err := s.projectstore.GetWorkspaceBaseCommitId(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	baseCommitId, err := s.projectstore.GetWorkspaceBaseCommitId(db, in.GetWorkspaceId())
 	if err != nil {
 		return nil, err
 	}
 
-	prevCommitId, err := s.projectstore.MaxCommitId(db, in.GetOwnerUsername(), in.GetProjectId())
+	prevCommitId, err := s.projectstore.MaxCommitId(db)
 	if err != nil {
 		return nil, err
 	}
@@ -966,7 +932,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 		return nil, errors.New("workspace is not up to date with latest commit")
 	}
 
-	changedPathHashes, err := s.projectstore.ListWorkspaceChangedPathHashes(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId())
+	changedPathHashes, err := s.projectstore.ListWorkspaceChangedPathHashes(db, in.GetWorkspaceId())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -978,7 +944,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 		return nil, err
 	}
 
-	newCommitId, err := s.projectstore.AddCommit(db, in.GetOwnerUsername(), in.GetProjectId())
+	newCommitId, err := s.projectstore.AddCommit(db)
 	if err != nil {
 		return nil, err
 	}
@@ -989,7 +955,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 	}
 	worker := func(pathHashes chan []byte, results chan result) {
 		for pathHash := range pathHashes {
-			workspaceChunkHashes, err := s.projectstore.ListWorkspaceChunkHashes(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), maxChangeId, pathHash)
+			workspaceChunkHashes, err := s.projectstore.ListWorkspaceChunkHashes(db, in.GetWorkspaceId(), maxChangeId, pathHash)
 			if err != nil {
 				panic(err)
 			}
@@ -1027,7 +993,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 
 	pathHashes := make(chan []byte, len(changedPathHashes))
 	results := make(chan result, len(changedPathHashes))
-	for i := 0; i < 2048 && i <= len(changedPathHashes)/10+1; i++ {
+	for i := 0; i < 8 && i <= len(changedPathHashes)/10+1; i++ {
 		go worker(pathHashes, results)
 	}
 
@@ -1045,13 +1011,13 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 	}
 
 	for pathHash, workspaceChunkHashes := range newChunkHashes {
-		err = s.projectstore.InsertCommitChunkHashes(db, in.GetOwnerUsername(), in.GetProjectId(), newCommitId, []byte(pathHash), workspaceChunkHashes)
+		err = s.projectstore.InsertCommitChunkHashes(db, newCommitId, []byte(pathHash), workspaceChunkHashes)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err = s.projectstore.UpdateWorkspaceBaseCommit(db, in.GetOwnerUsername(), in.GetProjectId(), in.GetWorkspaceId(), newCommitId)
+	err = s.projectstore.UpdateWorkspaceBaseCommit(db, in.GetWorkspaceId(), newCommitId)
 	if err != nil {
 		return nil, err
 	}

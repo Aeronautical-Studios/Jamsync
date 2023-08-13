@@ -53,8 +53,9 @@ var defaultChunks []*jampb.Chunk = []*jampb.Chunk{
 }
 
 func TestChunking(t *testing.T) {
-	chunker, err := NewChunker(bytes.NewReader(defaultData), defaultOpts)
+	chunker, err := NewJamChunker(defaultOpts)
 	assertNoError(t, err)
+	chunker.SetChunkerReader(bytes.NewReader(defaultData))
 
 	for i := 0; ; i++ {
 		c, err := chunker.Next()
@@ -81,8 +82,9 @@ func TestChunking(t *testing.T) {
 
 func TestChunkingRandom(t *testing.T) {
 	data := randBytes(1e6, 63)
-	chunker, err := NewChunker(bytes.NewReader(data), defaultOpts)
+	chunker, err := NewJamChunker(defaultOpts)
 	assertNoError(t, err)
+	chunker.SetChunkerReader(bytes.NewReader(data))
 
 	var prevOffset uint64
 	var prevLength uint64
@@ -117,8 +119,10 @@ func TestMinSize(t *testing.T) {
 	data := randBytes(10, 51)
 	opts := defaultOpts
 	opts.DisableNormalization = true
-	chunker, err := NewChunker(bytes.NewReader(data), opts)
+	chunker, err := NewJamChunker(opts)
 	assertNoError(t, err)
+
+	chunker.SetChunkerReader(bytes.NewReader(data))
 
 	c, err := chunker.Next()
 	assertNoError(t, err)
@@ -153,10 +157,8 @@ func TestOptionsValidation(t *testing.T) {
 		// BufSize too small
 		{AverageSize: avg, BufSize: 1},
 	}
-	var r bytes.Reader
-
 	for i, opts := range testOpts {
-		_, err := NewChunker(&r, opts)
+		_, err := NewJamChunker(opts)
 		if err == nil {
 			t.Fatalf("%d: expected error", i)
 		}
@@ -170,9 +172,10 @@ func BenchmarkFastCDC(b *testing.B) {
 	r := newLoopReader(benchData, n)
 
 	b.ResetTimer()
-	cnkr, err := NewChunker(r, Options{
+	cnkr, err := NewJamChunker(Options{
 		AverageSize: 1 * miB,
 	})
+	cnkr.SetChunkerReader(r)
 	if err != nil {
 		b.Fatal(err)
 	}

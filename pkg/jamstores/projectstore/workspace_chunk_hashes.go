@@ -7,7 +7,22 @@ import (
 	"github.com/zdgeier/jam/gen/jampb"
 )
 
-func (s *LocalStore) InsertWorkspaceChunkHashes(db *sql.DB, ownerUsername string, projectId, workspaceId, changeId uint64, pathHash []byte, chunkHashes []*jampb.ChunkHash) error {
+func (s *LocalStore) InsertWorkspaceChunkHash(db *sql.DB, workspaceId, changeId uint64, pathHash []byte, chunkHash *jampb.ChunkHash) error {
+	insertStmt, err := db.Prepare("INSERT INTO workspace_chunk_hashes (workspace_id, change_id, path_hash, hash, offset, length) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertStmt.Close()
+
+	hashString := strconv.FormatUint(chunkHash.Hash, 10)
+	_, err = insertStmt.Exec(int64(workspaceId), int64(changeId), pathHash, hashString, int64(chunkHash.Offset), int64(chunkHash.Length))
+	if err != nil {
+		return err
+	}
+	return err
+}
+
+func (s *LocalStore) InsertWorkspaceChunkHashes(db *sql.DB, workspaceId, changeId uint64, pathHash []byte, chunkHashes []*jampb.ChunkHash) error {
 	insertStmt, err := db.Prepare("INSERT INTO workspace_chunk_hashes (workspace_id, change_id, path_hash, hash, offset, length) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
@@ -25,7 +40,7 @@ func (s *LocalStore) InsertWorkspaceChunkHashes(db *sql.DB, ownerUsername string
 	return err
 }
 
-func (s *LocalStore) ListWorkspaceChangedPathHashes(db *sql.DB, ownerUsername string, projectId, workspaceId uint64) (map[string]interface{}, error) {
+func (s *LocalStore) ListWorkspaceChangedPathHashes(db *sql.DB, workspaceId uint64) (map[string]interface{}, error) {
 	rows, err := db.Query("SELECT DISTINCT path_hash FROM workspace_chunk_hashes WHERE workspace_id = ?", workspaceId)
 	if err != nil {
 		return nil, err
@@ -45,13 +60,13 @@ func (s *LocalStore) ListWorkspaceChangedPathHashes(db *sql.DB, ownerUsername st
 	return pathHashes, nil
 }
 
-func (s *LocalStore) ListWorkspaceChunkHashes(db *sql.DB, ownerUsername string, projectId, workspaceId, changeId uint64, pathHash []byte) ([]*jampb.ChunkHash, error) {
+func (s *LocalStore) ListWorkspaceChunkHashes(db *sql.DB, workspaceId, changeId uint64, pathHash []byte) ([]*jampb.ChunkHash, error) {
 	rows, err := db.Query(`
 		SELECT hash, offset, length FROM workspace_chunk_hashes
 		WHERE change_id = (
 			SELECT MAX(change_id) FROM workspace_chunk_hashes
 			WHERE path_hash = ? AND workspace_id = ? AND change_id <= ?
-		) AND path_hash = ? AND workspace_id = ? AND change_id <= ?;
+		) AND path_hash = ? AND workspace_id = ?;
 	`, pathHash, workspaceId, changeId, pathHash, workspaceId, changeId)
 	if err != nil {
 		return nil, err
@@ -78,11 +93,11 @@ func (s *LocalStore) ListWorkspaceChunkHashes(db *sql.DB, ownerUsername string, 
 	}
 
 	if len(chunkHashes) == 0 {
-		baseCommitId, err := s.GetWorkspaceBaseCommitId(db, ownerUsername, projectId, workspaceId)
+		baseCommitId, err := s.GetWorkspaceBaseCommitId(db, workspaceId)
 		if err != nil {
 			return nil, err
 		}
-		return s.ListCommitChunkHashes(db, ownerUsername, projectId, baseCommitId, pathHash)
+		return s.ListCommitChunkHashes(db, baseCommitId, pathHash)
 	}
 
 	return chunkHashes, nil

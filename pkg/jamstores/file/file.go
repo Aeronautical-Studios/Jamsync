@@ -11,10 +11,11 @@ import (
 )
 
 func DownloadCommittedFile(client jampb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
-	localChunker, err := fastcdc.NewJamChunker(localReader)
+	localChunker, err := fastcdc.NewJamChunker(fastcdc.DefaultOpts)
 	if err != nil {
 		return err
 	}
+	localChunker.SetChunkerReader(localReader)
 
 	localChunkHashes, err := localChunker.CreateHashSignature()
 	if err != nil {
@@ -58,10 +59,11 @@ func DownloadCommittedFile(client jampb.JamHubClient, ownerUsername string, proj
 }
 
 func DownloadWorkspaceFile(client jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, filePath string, localReader io.ReadSeeker, localWriter io.Writer) error {
-	localChunker, err := fastcdc.NewJamChunker(localReader)
+	localChunker, err := fastcdc.NewJamChunker(fastcdc.DefaultOpts)
 	if err != nil {
 		return err
 	}
+	localChunker.SetChunkerReader(localReader)
 
 	localChunkHashes := make(map[uint64][]byte)
 	err = localChunker.CreateSignature(func(localChunk *jampb.ChunkHash) error {
