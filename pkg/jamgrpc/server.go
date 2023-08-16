@@ -94,6 +94,8 @@ func New() (closer func(), err error) {
 			logging.UnaryServerInterceptor(interceptorLogger(logger), loggerOpts...),
 			recovery.UnaryServerInterceptor(recoverOpts...),
 		),
+		grpc.MaxRecvMsgSize(1024 * 1024 * 1024),
+		grpc.MaxSendMsgSize(1024 * 1024 * 1024),
 	}
 
 	var host string
@@ -155,10 +157,9 @@ func New() (closer func(), err error) {
 }
 
 func Connect(accessToken *oauth2.Token) (client jampb.JamHubClient, closer func(), err error) {
-
 	md := metadata.New(map[string]string{"content-type": "application/grpc"})
 	perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(accessToken)}
-	opts := []grpc.DialOption{grpc.WithPerRPCCredentials(perRPC), grpc.WithDefaultCallOptions(grpc.Header(&md))}
+	opts := []grpc.DialOption{grpc.WithPerRPCCredentials(perRPC), grpc.WithDefaultCallOptions(grpc.Header(&md), grpc.MaxCallRecvMsgSize(1024*1024*1024), grpc.MaxCallSendMsgSize(1024*1024*1024))}
 
 	if jamenv.Env() == jamenv.Local {
 		pemServerCA, err := os.ReadFile("/etc/jamhub/certs/ca-cert.pem")

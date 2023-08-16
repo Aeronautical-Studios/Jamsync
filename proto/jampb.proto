@@ -29,7 +29,7 @@ service JamHub {
     rpc ReadWorkspaceFile(ReadWorkspaceFileRequest) returns (stream FileReadOperation);
     rpc AddChange(AddChangeRequest) returns (AddChangeResponse);
     rpc MergeWorkspace(MergeWorkspaceRequest) returns (MergeWorkspaceResponse);
-    rpc WriteWorkspaceOperationsStream(stream BatchedFileWriteOperation) returns (WriteOperationStreamResponse);
+    rpc WriteWorkspaceOperations(WriteWorkspaceOperationsRequest) returns (WriteWorkspaceOperationsResponse);
     rpc GetOperationStreamToken(GetOperationStreamTokenRequest) returns (GetOperationStreamTokenResponse);
 
     // Lock operations
@@ -167,8 +167,7 @@ message EditorStreamMessage{
     bytes update_data = 3;
 }
 
-message WriteOperationStreamResponse {
-}
+message WriteWorkspaceOperationsResponse{}
 
 message FileMetadataDiff {
     enum Type {
@@ -221,7 +220,7 @@ message ListWorkspacesResponse {
     map<uint64, uint64> baseCommitIds = 2;
 }
 
-message BatchedFileWriteOperation {
+message WriteWorkspaceOperationsRequest {
     bytes operation_token = 1;
     repeated FileWriteOperation operations = 2;
 }

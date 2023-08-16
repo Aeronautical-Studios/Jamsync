@@ -129,7 +129,7 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 		return err
 	}
 
-	conn, err := s.commitdatastore.GetLocalDB(in.OwnerUsername, in.ProjectId, in.PathHash)
+	conn, err := s.commitdatastore.GetLocalDB(in.OwnerUsername, in.ProjectId)
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 				return err
 			}
 		} else {
-			data, err := s.commitdatastore.Read(conn, actualChunk.Hash)
+			data, err := s.commitdatastore.Read(conn, in.PathHash, actualChunk.Hash)
 			if err != nil {
 				return err
 			}

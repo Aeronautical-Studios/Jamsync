@@ -3,6 +3,7 @@
 package fastcdc
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"math"
@@ -125,21 +126,10 @@ func NewJamChunker(opts Options) (*Chunker, error) {
 }
 
 func (c *Chunker) SetChunkerReader(rd io.Reader) {
-	normalization := 2
-	bits := int(math.Round(math.Log2(float64(c.normSize))))
-	smallBits := bits + normalization
-	largeBits := bits - normalization
-	// Optimization to reuse buffer
-	*c = Chunker{
-		minSize:  c.minSize,
-		maxSize:  c.maxSize,
-		normSize: c.normSize,
-		maskS:    (1 << smallBits) - 1,
-		maskL:    (1 << largeBits) - 1,
-		buf:      c.buf[:cap(c.buf)],
-		cursor:   c.maxSize * 2,
-		rd:       rd,
-	}
+	c.buf = c.buf[:cap(c.buf)]
+	c.eof = false
+	c.rd = rd
+	c.cursor = c.maxSize * 2
 }
 
 func (c *Chunker) fillBuffer() error {
@@ -180,12 +170,14 @@ func (c *Chunker) Next() (*jampb.Chunk, error) {
 
 	length, fp := c.nextChunk(c.buf[c.cursor:])
 
-	hash := xxh3.Hash(c.buf[c.cursor : c.cursor+int(length)])
+	data := bytes.Clone(c.buf[c.cursor : c.cursor+int(length)])
+
+	hash := xxh3.Hash(data)
 
 	chunk := &jampb.Chunk{
 		Offset:      c.offset,
 		Length:      length,
-		Data:        c.buf[c.cursor : c.cursor+int(length)],
+		Data:        data,
 		Fingerprint: fp,
 		Hash:        hash,
 	}

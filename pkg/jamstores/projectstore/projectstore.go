@@ -23,11 +23,10 @@ func (s *LocalStore) GetLocalProjectDB(ownerUsername string, projectId uint64) (
 	}
 
 	var conn *sql.DB
-	conn, err = sql.Open("sqlite3", "file:"+dir+"/jamproject.db?cache=shared&mode=rwc")
+	conn, err = sql.Open("sqlite3", "file:"+dir+"/jamproject.db?cache=shared&mode=rwc&_journal=WAL")
 	if err != nil {
 		return nil, err
 	}
-	conn.SetMaxOpenConns(1)
 
 	sqlStmt := `
 	CREATE TABLE IF NOT EXISTS commits (timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
