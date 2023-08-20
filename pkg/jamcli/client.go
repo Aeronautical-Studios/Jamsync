@@ -17,6 +17,8 @@ import (
 	"github.com/zdgeier/jam/pkg/jamcli/jamignore"
 	"github.com/zdgeier/jam/pkg/jamstores/file"
 	"github.com/zeebo/xxh3"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -121,22 +123,16 @@ func pathToHash(path string) []byte {
 	return h[:]
 }
 
-func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, currChangeId uint64, fileMetadata *jampb.FileMetadata, fileMetadataDiff *jampb.FileMetadataDiff) error {
+func pushFileListDiffWorkspace(conn *grpc.ClientConn, ownerUsername string, projectId uint64, workspaceId uint64, currChangeId uint64, fileMetadata *jampb.FileMetadata, fileMetadataDiff *jampb.FileMetadataDiff) error {
 	ctx := context.Background()
 
 	numFiles := 0
-	totalSize := int64(0)
-	for path, diff := range fileMetadataDiff.GetDiffs() {
+	for _, diff := range fileMetadataDiff.GetDiffs() {
 		if diff.GetType() != jampb.FileMetadataDiff_NoOp && diff.GetType() != jampb.FileMetadataDiff_Delete && !diff.GetFile().GetDir() {
 			numFiles += 1
-			s, err := os.Stat(path)
-			if err != nil {
-				panic(err)
-			}
-			totalSize += s.Size()
 		}
 	}
-
+	apiClient := jampb.NewJamHubClient(conn)
 	tokenResp, err := apiClient.GetOperationStreamToken(ctx, &jampb.GetOperationStreamTokenRequest{
 		OwnerUsername: ownerUsername,
 		ProjectId:     projectId,
@@ -146,7 +142,7 @@ func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername strin
 		panic(err)
 	}
 
-	bar := progressbar.DefaultBytes(int64(totalSize), "Uploading")
+	bar := progressbar.DefaultBytes(-1, "Uploading")
 
 	pathHashToPath := make(map[string]string)
 	pathHashes := make([][]byte, 0, numFiles)
@@ -176,7 +172,13 @@ func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername strin
 		panic(err)
 	}
 
+	operationStream, err := apiClient.WriteWorkspaceOperationsStream(ctx, grpc.UseCompressor(gzip.Name))
+	if err != nil {
+		panic(err)
+	}
+
 	operations := make([]*jampb.FileWriteOperation, 0, numFiles)
+	var wg sync.WaitGroup
 	written := 0
 	for _, job := range fileHashesResp.Hashes {
 		path := pathHashToPath[string(job.PathHash)]
@@ -197,14 +199,23 @@ func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername strin
 
 		err = sourceChunker.CreateDelta(job.Hashes, func(chunk *jampb.Chunk) error {
 			written = written + len(chunk.Data)
-			if written > 1024*1024*511 {
-				_, err = apiClient.WriteWorkspaceOperations(ctx, &jampb.WriteWorkspaceOperationsRequest{
-					OperationToken: tokenResp.Token,
-					Operations:     operations,
-				})
-				if err != nil {
-					panic(err)
-				}
+			if written > 1024*1024 {
+				wg.Add(1)
+				writeOps := make([]*jampb.FileWriteOperation, len(operations))
+				copy(writeOps, operations)
+				go func(writeOps []*jampb.FileWriteOperation) {
+					_, err := jampb.NewJamHubClient(conn).WriteWorkspaceOperations(ctx, &jampb.WriteWorkspaceOperationsRequest{
+						OperationToken: tokenResp.Token,
+						Operations:     writeOps,
+					}, grpc.UseCompressor(gzip.Name))
+					if err != nil {
+						panic(err)
+					}
+					for _, op := range writeOps {
+						bar.Write(op.Chunk.Data)
+					}
+					wg.Done()
+				}(writeOps)
 				written = 0
 				operations = operations[:0]
 			}
@@ -213,7 +224,6 @@ func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername strin
 				Chunk:    chunk,
 			})
 			written += len(chunk.Data)
-			bar.Write(chunk.Data)
 			return nil
 		})
 		if err != nil {
@@ -229,14 +239,22 @@ func pushFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername strin
 		}
 	}
 
-	_, err = apiClient.WriteWorkspaceOperations(ctx, &jampb.WriteWorkspaceOperationsRequest{
-		OperationToken: tokenResp.Token,
-		Operations:     operations,
-	})
-	if err != nil {
-		return err
-	}
+	wg.Add(1)
+	go func() {
+		_, err = jampb.NewJamHubClient(conn).WriteWorkspaceOperations(ctx, &jampb.WriteWorkspaceOperationsRequest{
+			OperationToken: tokenResp.Token,
+			Operations:     operations,
+		}, grpc.UseCompressor(gzip.Name))
+		if err != nil {
+			panic(err)
+		}
+		for _, op := range operations {
+			bar.Write(op.Chunk.Data)
+		}
+		wg.Done()
+	}()
 
+	wg.Wait()
 	bar.Finish()
 
 	return nil

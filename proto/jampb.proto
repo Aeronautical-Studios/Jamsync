@@ -29,7 +29,7 @@ service JamHub {
     rpc ReadWorkspaceFile(ReadWorkspaceFileRequest) returns (stream FileReadOperation);
     rpc AddChange(AddChangeRequest) returns (AddChangeResponse);
     rpc MergeWorkspace(MergeWorkspaceRequest) returns (MergeWorkspaceResponse);
-    rpc WriteWorkspaceOperations(WriteWorkspaceOperationsRequest) returns (WriteWorkspaceOperationsResponse);
+    rpc WriteWorkspaceOperationsStream(stream WriteWorkspaceOperationsRequest) returns (WriteWorkspaceOperationsResponse);
     rpc GetOperationStreamToken(GetOperationStreamTokenRequest) returns (GetOperationStreamTokenResponse);
 
     // Lock operations

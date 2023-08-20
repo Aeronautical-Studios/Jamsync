@@ -47,7 +47,7 @@ func Authorize() (AuthFile, error) {
 			}
 		}
 
-		apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+		conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 			AccessToken: string(token),
 		})
 		if err != nil {
@@ -57,6 +57,7 @@ func Authorize() (AuthFile, error) {
 
 		ctx := context.Background()
 
+		apiClient := jampb.NewJamHubClient(conn)
 		resp, err := apiClient.CurrentUser(ctx, &jampb.CurrentUserRequest{})
 		if err != nil {
 			fmt.Println("Log into the website first to create your account.")
@@ -85,7 +86,7 @@ func Authorize() (AuthFile, error) {
 		return authFile, err
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -93,6 +94,7 @@ func Authorize() (AuthFile, error) {
 	}
 	defer closer()
 
+	apiClient := jampb.NewJamHubClient(conn)
 	_, err = apiClient.CurrentUser(context.Background(), &jampb.CurrentUserRequest{})
 	if err != nil {
 		// If outdated token

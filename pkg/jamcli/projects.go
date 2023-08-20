@@ -18,7 +18,7 @@ func ListProjects() {
 		panic(err)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -32,6 +32,7 @@ func ListProjects() {
 		log.Panic(err)
 	}
 
+	apiClient := jampb.NewJamHubClient(conn)
 	resp, err := apiClient.ListUserProjects(ctx, &jampb.ListUserProjectsRequest{})
 	if err != nil {
 		log.Panic(err)

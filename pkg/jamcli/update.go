@@ -25,13 +25,15 @@ func Update() {
 		os.Exit(1)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
 		log.Panic(err)
 	}
 	defer closer()
+
+	apiClient := jampb.NewJamHubClient(conn)
 
 	if state.CommitInfo != nil {
 		fmt.Println("Currently on the mainline, use `workon` to make changes.")

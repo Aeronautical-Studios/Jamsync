@@ -22,12 +22,12 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/grpc/status"
 )
 
 type JamHub struct {
@@ -71,9 +71,9 @@ func New() (closer func(), err error) {
 		projectstore:       projectstore.NewLocalStore(),
 	}
 
-	var customFunc recovery.RecoveryHandlerFunc = func(p any) (err error) {
-		return status.Errorf(codes.Unknown, "panic triggered: %v", p)
-	}
+	// var customFunc recovery.RecoveryHandlerFunc = func(p any) (err error) {
+	// 	return status.Errorf(codes.Unknown, "panic triggered: %v", p)
+	// }
 
 	logger := log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lshortfile)
 
@@ -84,7 +84,7 @@ func New() (closer func(), err error) {
 
 	// Shared options for the logger, with a custom gRPC code to log level function.
 	recoverOpts := []recovery.Option{
-		recovery.WithRecoveryHandler(customFunc),
+		// 	recovery.WithRecoveryHandler(customFunc),
 	}
 
 	opts := []grpc.ServerOption{
@@ -97,6 +97,7 @@ func New() (closer func(), err error) {
 		grpc.MaxRecvMsgSize(1024 * 1024 * 1024),
 		grpc.MaxSendMsgSize(1024 * 1024 * 1024),
 	}
+	encoding.RegisterCompressor(encoding.GetCompressor(gzip.Name))
 
 	var host string
 	if jamenv.Env() == jamenv.Local {
@@ -156,10 +157,16 @@ func New() (closer func(), err error) {
 	return func() { server.Stop() }, nil
 }
 
-func Connect(accessToken *oauth2.Token) (client jampb.JamHubClient, closer func(), err error) {
+var clientWrittenBytes int
+
+func clientInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
+func Connect(accessToken *oauth2.Token) (client *grpc.ClientConn, closer func(), err error) {
 	md := metadata.New(map[string]string{"content-type": "application/grpc"})
 	perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(accessToken)}
-	opts := []grpc.DialOption{grpc.WithPerRPCCredentials(perRPC), grpc.WithDefaultCallOptions(grpc.Header(&md), grpc.MaxCallRecvMsgSize(1024*1024*1024), grpc.MaxCallSendMsgSize(1024*1024*1024))}
+	opts := []grpc.DialOption{grpc.WithPerRPCCredentials(perRPC), grpc.WithUnaryInterceptor(clientInterceptor), grpc.WithDefaultCallOptions(grpc.Header(&md), grpc.MaxCallRecvMsgSize(1024*1024*1024), grpc.MaxCallSendMsgSize(1024*1024*1024))}
 
 	if jamenv.Env() == jamenv.Local {
 		pemServerCA, err := os.ReadFile("/etc/jamhub/certs/ca-cert.pem")
@@ -185,12 +192,11 @@ func Connect(accessToken *oauth2.Token) (client jampb.JamHubClient, closer func(
 	if err != nil {
 		log.Panicf("could not connect to jamhub server: %s", err)
 	}
-	client = jampb.NewJamHubClient(conn)
 	closer = func() {
 		if err := conn.Close(); err != nil {
 			log.Panic("could not close server connection")
 		}
 	}
 
-	return client, closer, err
+	return conn, closer, err
 }

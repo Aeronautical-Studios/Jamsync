@@ -24,7 +24,7 @@ func WorkOn() {
 		panic(err)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -43,6 +43,8 @@ func WorkOn() {
 		fmt.Println("Could not find a `.jam` file. Run `jam init` to initialize the project.")
 		os.Exit(0)
 	}
+
+	apiClient := jampb.NewJamHubClient(conn)
 
 	if state.CommitInfo == nil || state.WorkspaceInfo != nil {
 		// on workspace

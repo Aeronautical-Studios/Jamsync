@@ -12,10 +12,10 @@ type LocalStore struct {
 }
 
 type FileLock struct {
-	ProjectId uint64
-	Username string
+	ProjectId      uint64
+	Username       string
 	B64EncodedPath string
-	IsDir    bool
+	IsDir          bool
 }
 
 func NewLocalStore() (db LocalStore) {
@@ -246,6 +246,10 @@ func (j LocalStore) UserId(username string) (string, error) {
 
 func (j LocalStore) CreateFileLock(projectId uint64, username string, b64EncodedPath string, isDir bool) error {
 	rows, err := j.db.Query("SELECT username FROM filelocks WHERE project_id = ? AND username != ? AND file_hash = ?", projectId, username, b64EncodedPath)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var username string
@@ -299,6 +303,10 @@ func (j LocalStore) ListFileLocks(projectId uint64) ([]FileLock, error) {
 
 func (j LocalStore) DeleteFileLock(projectId uint64, username string, b64EncodedPath string) error {
 	rows, err := j.db.Query("SELECT username FROM filelocks WHERE project_id = ? AND username != ? AND file_hash = ?", projectId, username, b64EncodedPath)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var username string

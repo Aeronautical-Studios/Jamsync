@@ -2,20 +2,21 @@ package jamcli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
-	"time"
-	"errors"
 	"path"
 	"path/filepath"
+	"time"
+
+	b64 "encoding/base64"
 
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
 	"golang.org/x/oauth2"
-	b64 "encoding/base64"
 )
 
 // Lock locks a file or directory in the current project.
@@ -29,7 +30,7 @@ func Lock() {
 		panic(err)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -49,6 +50,7 @@ func Lock() {
 		os.Exit(0)
 	}
 
+	apiClient := jampb.NewJamHubClient(conn)
 	resp, err := apiClient.CurrentUser(context.Background(), &jampb.CurrentUserRequest{})
 	if err != nil {
 		panic(err)
@@ -80,10 +82,10 @@ func lockFile(apiClient jampb.JamHubClient, ownerUsername string, projectId uint
 	}
 
 	res, err := apiClient.UpdateFileLock(context.Background(), &jampb.UpdateFileLockRequest{
-		ProjectId: projectId,
-		OwnerUsername: ownerUsername,
+		ProjectId:      projectId,
+		OwnerUsername:  ownerUsername,
 		B64EncodedPath: b64.URLEncoding.EncodeToString([]byte(path)),
-		IsDir: fileInfo.IsDir(),
+		IsDir:          fileInfo.IsDir(),
 		LockUnlockFlag: true,
 	})
 

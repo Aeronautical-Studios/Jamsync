@@ -6,8 +6,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-
-	"github.com/zdgeier/jam/gen/jampb"
 )
 
 type LocalStore struct{}
@@ -49,9 +47,9 @@ func (s *LocalStore) GetLocalDB(ownerUsername string, projectId uint64, workspac
 	return conn, nil
 }
 
-func (s *LocalStore) Read(conn *sql.DB, pathHash []byte, hash uint64) ([]byte, error) {
+func (s *LocalStore) Read(stmt *sql.Stmt, pathHash []byte, hash uint64) ([]byte, error) {
 	hashString := strconv.FormatUint(hash, 10)
-	row := conn.QueryRow("SELECT data FROM hashes WHERE path_hash = ? AND hash = ?", pathHash, hashString)
+	row := stmt.QueryRow(pathHash, hashString)
 	if row.Err() != nil {
 		return nil, row.Err()
 	}
@@ -68,46 +66,46 @@ func (s *LocalStore) Read(conn *sql.DB, pathHash []byte, hash uint64) ([]byte, e
 	return data, nil
 }
 
-func (s *LocalStore) ReadBatched(conn *sql.DB, pathHash []byte, chunkHashes []*jampb.ChunkHash) (map[uint64][]byte, error) {
-	sqlStr := "SELECT hash, data FROM hashes WHERE path_hash = ? AND "
-	vals := []interface{}{}
-	vals = append(vals, pathHash)
+// func (s *LocalStore) ReadBatched(conn *sql.DB, pathHash []byte, chunkHashes []*jampb.ChunkHash) (map[uint64][]byte, error) {
+// 	sqlStr := "SELECT hash, data FROM hashes WHERE path_hash = ? AND "
+// 	vals := []interface{}{}
+// 	vals = append(vals, pathHash)
 
-	for _, chunkHash := range chunkHashes {
-		hashString := strconv.FormatUint(chunkHash.Hash, 10)
-		sqlStr += "hash = ? OR "
-		vals = append(vals, hashString)
-	}
-	sqlStr = sqlStr[0 : len(sqlStr)-4]
-	stmt, err := conn.Prepare(sqlStr)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := stmt.Query(vals...)
-	if err != nil {
-		return nil, err
-	}
+// 	for _, chunkHash := range chunkHashes {
+// 		hashString := strconv.FormatUint(chunkHash.Hash, 10)
+// 		sqlStr += "hash = ? OR "
+// 		vals = append(vals, hashString)
+// 	}
+// 	sqlStr = sqlStr[0 : len(sqlStr)-4]
+// 	stmt, err := conn.Prepare(sqlStr)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	rows, err := stmt.Query(vals...)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	datas := make(map[uint64][]byte, 0)
-	for rows.Next() {
-		var data []byte
-		var hashString string
-		err := rows.Scan(&hashString, &data)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return nil, nil
-			}
-			return nil, err
-		}
-		hash, err := strconv.ParseUint(hashString, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		datas[hash] = data
-	}
+// 	datas := make(map[uint64][]byte, 0)
+// 	for rows.Next() {
+// 		var data []byte
+// 		var hashString string
+// 		err := rows.Scan(&hashString, &data)
+// 		if err != nil {
+// 			if err == sql.ErrNoRows {
+// 				return nil, nil
+// 			}
+// 			return nil, err
+// 		}
+// 		hash, err := strconv.ParseUint(hashString, 10, 64)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		datas[hash] = data
+// 	}
 
-	return datas, nil
-}
+// 	return datas, nil
+// }
 
 func (s *LocalStore) HashExists(conn *sql.DB, pathHash []byte, hash uint64) bool {
 	hashString := strconv.FormatUint(hash, 10)
@@ -121,9 +119,9 @@ func (s *LocalStore) HashExists(conn *sql.DB, pathHash []byte, hash uint64) bool
 	return err == nil
 }
 
-func (s *LocalStore) Write(conn *sql.DB, pathHash []byte, hash uint64, data []byte) error {
+func (s *LocalStore) Write(tx *sql.Tx, pathHash []byte, hash uint64, data []byte) error {
 	hashString := strconv.FormatUint(hash, 10)
-	_, err := conn.Exec("INSERT INTO hashes (path_hash, hash, data) VALUES(?, ?, ?)", pathHash, hashString, data)
+	_, err := tx.Exec("INSERT INTO hashes (path_hash, hash, data) VALUES(?, ?, ?)", pathHash, hashString, data)
 	return err
 }
 

@@ -6,12 +6,13 @@ import (
 	"log"
 	"os"
 
+	b64 "encoding/base64"
+
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamcli/authfile"
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
 	"golang.org/x/oauth2"
-	b64 "encoding/base64"
 )
 
 func Pull() {
@@ -26,13 +27,14 @@ func Pull() {
 		panic(err)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
 		log.Panic(err)
 	}
 	defer closer()
+	apiClient := jampb.NewJamHubClient(conn)
 
 	fmt.Println("Pulling changes from Jam...")
 	if state.CommitInfo == nil {

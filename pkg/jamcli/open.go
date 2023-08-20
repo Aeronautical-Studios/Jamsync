@@ -49,7 +49,7 @@ func Open() {
 		panic(err)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -68,6 +68,7 @@ func Open() {
 		return
 	}
 
+	apiClient := jampb.NewJamHubClient(conn)
 	nameResp, err := apiClient.GetProjectName(context.Background(), &jampb.GetProjectNameRequest{
 		OwnerUsername: state.OwnerUsername,
 		ProjectId:     state.ProjectId,

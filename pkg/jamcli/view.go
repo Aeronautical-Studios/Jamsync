@@ -31,7 +31,7 @@ func View() {
 		panic(err)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -43,6 +43,8 @@ func View() {
 	if err != nil {
 		log.Panic(err)
 	}
+
+	apiClient := jampb.NewJamHubClient(conn)
 
 	if state.CommitInfo == nil {
 		requestedChangeId := uint64(a)

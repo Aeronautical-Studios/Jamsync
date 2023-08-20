@@ -24,7 +24,7 @@ func Push() {
 		os.Exit(1)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -36,6 +36,7 @@ func Push() {
 		fmt.Println("Currently on the mainline, use `jam workon <workspace name>` to make changes.")
 		os.Exit(1)
 	}
+	apiClient := jampb.NewJamHubClient(conn)
 
 	fileMetadata := ReadLocalFileList()
 	localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, stateFile.OwnerUsername, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, stateFile.WorkspaceInfo.ChangeId, fileMetadata)
@@ -45,7 +46,7 @@ func Push() {
 
 	changeId := stateFile.WorkspaceInfo.ChangeId
 	if DiffHasChanges(localToRemoteDiff) {
-		err = pushFileListDiffWorkspace(apiClient, stateFile.OwnerUsername, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, changeId, fileMetadata, localToRemoteDiff)
+		err = pushFileListDiffWorkspace(conn, stateFile.OwnerUsername, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, changeId, fileMetadata, localToRemoteDiff)
 		if err != nil {
 			log.Panic(err)
 		}

@@ -25,7 +25,7 @@ func Merge() {
 		panic(err)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -39,6 +39,7 @@ func Merge() {
 	}
 
 	fileMetadata := ReadLocalFileList()
+	apiClient := jampb.NewJamHubClient(conn)
 	remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 	if err != nil {
 		log.Panic(err)

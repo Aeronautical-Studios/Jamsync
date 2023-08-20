@@ -13,12 +13,14 @@ import (
 	"github.com/zdgeier/jam/pkg/jamcli/statefile"
 	"github.com/zdgeier/jam/pkg/jamgrpc"
 	"golang.org/x/oauth2"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-func InitNewProject(apiClient jampb.JamHubClient, projectName string) {
+func InitNewProject(conn *grpc.ClientConn, projectName string) {
 	ctx := context.Background()
+	apiClient := jampb.NewJamHubClient(conn)
 	resp, err := apiClient.AddProject(ctx, &jampb.AddProjectRequest{
 		ProjectName: projectName,
 	})
@@ -46,7 +48,7 @@ func InitNewProject(apiClient jampb.JamHubClient, projectName string) {
 		panic(err)
 	}
 
-	err = pushFileListDiffWorkspace(apiClient, resp.GetOwnerUsername(), resp.GetProjectId(), workspaceResp.WorkspaceId, 0, fileMetadata, fileMetadataDiff)
+	err = pushFileListDiffWorkspace(conn, resp.GetOwnerUsername(), resp.GetProjectId(), workspaceResp.WorkspaceId, 0, fileMetadata, fileMetadataDiff)
 	if err != nil {
 		panic(err)
 	}
@@ -149,7 +151,7 @@ func InitConfig() {
 		os.Exit(1)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -165,7 +167,7 @@ func InitConfig() {
 			fmt.Print("Project Name: ")
 			var projectName string
 			fmt.Scan(&projectName)
-			InitNewProject(apiClient, projectName)
+			InitNewProject(conn, projectName)
 			break
 		} else if strings.ToLower(flag) == "n" {
 			empty, err := IsEmpty(".")
@@ -180,7 +182,7 @@ func InitConfig() {
 			var ownerProjectName string
 			fmt.Scan(&ownerProjectName)
 			s := strings.Split(ownerProjectName, "/")
-			InitExistingProject(apiClient, s[0], s[1])
+			InitExistingProject(jampb.NewJamHubClient(conn), s[0], s[1])
 			break
 		}
 	}

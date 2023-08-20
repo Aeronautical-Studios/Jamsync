@@ -60,14 +60,8 @@ func (s *LocalStore) ListWorkspaceChangedPathHashes(db *sql.DB, workspaceId uint
 	return pathHashes, nil
 }
 
-func (s *LocalStore) ListWorkspaceChunkHashes(db *sql.DB, workspaceId, changeId uint64, pathHash []byte) ([]*jampb.ChunkHash, error) {
-	rows, err := db.Query(`
-		SELECT hash, offset, length FROM workspace_chunk_hashes
-		WHERE change_id = (
-			SELECT MAX(change_id) FROM workspace_chunk_hashes
-			WHERE path_hash = ? AND workspace_id = ? AND change_id <= ?
-		) AND path_hash = ? AND workspace_id = ?;
-	`, pathHash, workspaceId, changeId, pathHash, workspaceId, changeId)
+func (s *LocalStore) ListWorkspaceChunkHashes(db *sql.DB, stmt *sql.Stmt, workspaceId, changeId uint64, pathHash []byte) ([]*jampb.ChunkHash, error) {
+	rows, err := stmt.Query(pathHash, workspaceId, changeId, pathHash, workspaceId)
 	if err != nil {
 		return nil, err
 	}

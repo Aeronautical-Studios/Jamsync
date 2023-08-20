@@ -20,7 +20,7 @@ func ListWorkspaces() {
 		panic(err)
 	}
 
-	apiClient, closer, err := jamgrpc.Connect(&oauth2.Token{
+	conn, closer, err := jamgrpc.Connect(&oauth2.Token{
 		AccessToken: string(authFile.Token),
 	})
 	if err != nil {
@@ -39,6 +39,8 @@ func ListWorkspaces() {
 		fmt.Println("Could not find a `.jam` file. Run `jam init` to initialize the project.")
 		os.Exit(0)
 	}
+
+	apiClient := jampb.NewJamHubClient(conn)
 
 	resp, err := apiClient.ListWorkspaces(ctx, &jampb.ListWorkspacesRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId})
 	if err != nil {
