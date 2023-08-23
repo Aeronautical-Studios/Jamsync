@@ -116,7 +116,7 @@ func InitExistingProject(apiClient jampb.JamHubClient, ownerUsername string, pro
 		log.Panic(err)
 	}
 
-	diffRemoteToLocalResp, err := DiffRemoteToLocalCommit(apiClient, ownerUsername, resp.ProjectId, commitResp.CommitId, &jampb.FileMetadata{})
+	diffRemoteToLocalResp, err := diffRemoteToLocalCommit(apiClient, ownerUsername, resp.ProjectId, commitResp.CommitId, &jampb.FileMetadata{})
 	if err != nil {
 		log.Panic(err)
 	}

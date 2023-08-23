@@ -135,6 +135,12 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 	}
 	defer conn.Close()
 
+	commitDataStmt, err := conn.Prepare("SELECT data FROM hashes WHERE path_hash = ? AND hash = ?")
+	if err != nil {
+		return err
+	}
+	defer commitDataStmt.Close()
+
 	for _, actualChunk := range actualChunkHashes {
 		if _, ok := in.LocalChunkHashes[actualChunk.Hash]; ok {
 			err = srv.Send(&jampb.FileReadOperation{
@@ -149,7 +155,7 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 				return err
 			}
 		} else {
-			data, err := s.commitdatastore.Read(conn, in.PathHash, actualChunk.Hash)
+			data, err := s.commitdatastore.Read(commitDataStmt, in.PathHash, actualChunk.Hash)
 			if err != nil {
 				return err
 			}

@@ -39,7 +39,7 @@ func Push() {
 	apiClient := jampb.NewJamHubClient(conn)
 
 	fileMetadata := ReadLocalFileList()
-	localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, stateFile.OwnerUsername, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, stateFile.WorkspaceInfo.ChangeId, fileMetadata)
+	localToRemoteDiff, err := diffLocalToRemoteWorkspace(apiClient, stateFile.OwnerUsername, stateFile.ProjectId, stateFile.WorkspaceInfo.WorkspaceId, stateFile.WorkspaceInfo.ChangeId, fileMetadata)
 	if err != nil {
 		log.Panic(err)
 	}

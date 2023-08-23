@@ -240,8 +240,13 @@ message File {
     bytes hash = 3;
 }
 
+message PathFile {
+    string path = 1;
+    File file = 2;
+}
+
 message FileMetadata {
-    map<string, File> files = 1;
+    repeated PathFile files = 1;
 }
 
 message GetCollaboratorsRequest {

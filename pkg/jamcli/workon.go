@@ -50,7 +50,7 @@ func WorkOn() {
 		// on workspace
 		if os.Args[2] == "main" || os.Args[2] == "mainline" {
 			fileMetadata := ReadLocalFileList()
-			localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+			localToRemoteDiff, err := diffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -67,7 +67,7 @@ func WorkOn() {
 				log.Panic(err)
 			}
 
-			diffRemoteToLocalResp, err := DiffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, commitResp.CommitId, fileMetadata)
+			diffRemoteToLocalResp, err := diffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, commitResp.CommitId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -107,7 +107,7 @@ func WorkOn() {
 
 				// Check to see if there are any local changes that haven't been pushed
 				fileMetadata := ReadLocalFileList()
-				localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+				localToRemoteDiff, err := diffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 				if err != nil {
 					log.Panic(err)
 				}
@@ -122,7 +122,7 @@ func WorkOn() {
 				}
 
 				// if workspace already exists, do a pull
-				remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, fileMetadata)
+				remoteToLocalDiff, err := diffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, fileMetadata)
 				if err != nil {
 					log.Panic(err)
 				}
@@ -209,7 +209,7 @@ func WorkOn() {
 		}
 
 		// if workspace already exists, do a pull
-		remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, fileMetadata)
+		remoteToLocalDiff, err := diffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, workspaceId, changeResp.ChangeId, fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}

@@ -72,9 +72,9 @@ func (s *LocalStore) GetChunkHashes(conn *sql.DB, pathHash []byte) ([]uint64, er
 	return hashes, err
 }
 
-func (s *LocalStore) Read(conn *sql.DB, pathHash []byte, hash uint64) ([]byte, error) {
+func (s *LocalStore) Read(stmt *sql.Stmt, pathHash []byte, hash uint64) ([]byte, error) {
 	hashString := strconv.FormatUint(hash, 10)
-	row := conn.QueryRow("SELECT data FROM hashes WHERE path_hash = ? AND hash = ?", pathHash, hashString)
+	row := stmt.QueryRow(pathHash, hashString)
 	if row.Err() != nil {
 		return nil, row.Err()
 	}
@@ -105,23 +105,3 @@ func (s *LocalStore) Write(stmt *sql.Stmt, pathHash []byte, hash uint64, data []
 	_, err := stmt.Exec(pathHash, hashString, data)
 	return err
 }
-
-// func (s *LocalStore) WriteBatched(conn *sql.DB, pathHash []byte, datas map[uint64][]byte) error {
-// 	sqlStr := "INSERT INTO hashes (path_hash, hash, data) VALUES "
-// 	vals := []interface{}{}
-//
-// 	for hash, data := range datas {
-// 		hashString := strconv.FormatUint(hash, 10)
-// 		sqlStr += "(?, ?, ?),"
-// 		vals = append(vals, pathHash, hashString, data)
-// 	}
-// 	sqlStr = sqlStr[0 : len(sqlStr)-1]
-// 	fmt.Println(sqlStr)
-// 	stmt, err := conn.Prepare(sqlStr)
-// 	if err != nil {
-// 		fmt.Println(len(datas), datas)
-// 		panic(err)
-// 	}
-// 	_, err = stmt.Exec(vals...)
-// 	return err
-// }

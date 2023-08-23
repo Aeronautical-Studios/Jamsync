@@ -130,6 +130,7 @@ func (c *Chunker) SetChunkerReader(rd io.Reader) {
 	c.eof = false
 	c.rd = rd
 	c.cursor = c.maxSize * 2
+	c.offset = 0
 }
 
 func (c *Chunker) fillBuffer() error {

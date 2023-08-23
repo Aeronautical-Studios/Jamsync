@@ -22,12 +22,14 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 type JamHub struct {
@@ -71,9 +73,9 @@ func New() (closer func(), err error) {
 		projectstore:       projectstore.NewLocalStore(),
 	}
 
-	// var customFunc recovery.RecoveryHandlerFunc = func(p any) (err error) {
-	// 	return status.Errorf(codes.Unknown, "panic triggered: %v", p)
-	// }
+	var customFunc recovery.RecoveryHandlerFunc = func(p any) (err error) {
+		return status.Errorf(codes.Unknown, "panic triggered: %v", p)
+	}
 
 	logger := log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lshortfile)
 
@@ -84,7 +86,7 @@ func New() (closer func(), err error) {
 
 	// Shared options for the logger, with a custom gRPC code to log level function.
 	recoverOpts := []recovery.Option{
-		// 	recovery.WithRecoveryHandler(customFunc),
+		recovery.WithRecoveryHandler(customFunc),
 	}
 
 	opts := []grpc.ServerOption{

@@ -9,12 +9,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/schollz/progressbar/v3"
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/fastcdc"
 	"github.com/zdgeier/jam/pkg/jamcli/jamignore"
+	"github.com/zdgeier/jam/pkg/jamfilelist"
 	"github.com/zdgeier/jam/pkg/jamstores/file"
 	"github.com/zeebo/xxh3"
 	"google.golang.org/grpc"
@@ -55,7 +57,7 @@ func ReadLocalFileList() *jampb.FileMetadata {
 	}
 
 	var wg sync.WaitGroup
-	files := make(map[string]*jampb.File, numEntries)
+	files := make(jamfilelist.PathFileList, 0, numEntries)
 	filesMutex := sync.Mutex{}
 
 	var walkDir func(dir string) // needed for goroutine
@@ -76,9 +78,12 @@ func ReadLocalFileList() *jampb.FileMetadata {
 				wg.Add(1)
 				go walkDir(path)
 				filesMutex.Lock()
-				files[path] = &jampb.File{
-					Dir: true,
-				}
+				files = append(files, &jampb.PathFile{
+					Path: path,
+					File: &jampb.File{
+						Dir: true,
+					},
+				})
 				filesMutex.Unlock()
 				return filepath.SkipDir
 			} else if path == dir {
@@ -96,10 +101,13 @@ func ReadLocalFileList() *jampb.FileMetadata {
 
 			if path != "" {
 				filesMutex.Lock()
-				files[path] = &jampb.File{
-					Dir:  false,
-					Hash: bytes[:],
-				}
+				files = append(files, &jampb.PathFile{
+					Path: path,
+					File: &jampb.File{
+						Dir:  false,
+						Hash: bytes[:],
+					},
+				})
 				filesMutex.Unlock()
 			}
 
@@ -108,6 +116,7 @@ func ReadLocalFileList() *jampb.FileMetadata {
 
 		filepath.Walk(dir, visit)
 	}
+	sort.Sort(files)
 
 	wg.Add(1)
 	walkDir(".")
@@ -142,16 +151,28 @@ func pushFileListDiffWorkspace(conn *grpc.ClientConn, ownerUsername string, proj
 		panic(err)
 	}
 
-	bar := progressbar.DefaultBytes(-1, "Uploading")
+	metadataBytes, err := proto.Marshal(fileMetadata)
+	if err != nil {
+		return err
+	}
 
 	pathHashToPath := make(map[string]string)
 	pathHashes := make([][]byte, 0, numFiles)
+	totalSize := int64(len(metadataBytes))
 	for path, diff := range fileMetadataDiff.GetDiffs() {
 		if diff.GetType() != jampb.FileMetadataDiff_NoOp && diff.GetType() != jampb.FileMetadataDiff_Delete && !diff.GetFile().GetDir() {
 			pathHashes = append(pathHashes, pathToHash(path))
 			pathHashToPath[string(pathToHash(path))] = path
+
+			s, err := os.Stat(path)
+			if err != nil {
+				panic(err)
+			}
+			totalSize += s.Size()
 		}
 	}
+
+	bar := progressbar.DefaultBytes(totalSize, "Uploading")
 
 	pathHashes = append(pathHashes, pathToHash(".jamfilelist"))
 	pathHashToPath[string(pathToHash(".jamfilelist"))] = ".jamfilelist"
@@ -177,17 +198,10 @@ func pushFileListDiffWorkspace(conn *grpc.ClientConn, ownerUsername string, proj
 		panic(err)
 	}
 
-	operations := make([]*jampb.FileWriteOperation, 0, numFiles)
-	var wg sync.WaitGroup
-	written := 0
 	for _, job := range fileHashesResp.Hashes {
 		path := pathHashToPath[string(job.PathHash)]
 		var file *os.File
 		if path == ".jamfilelist" {
-			metadataBytes, err := proto.Marshal(fileMetadata)
-			if err != nil {
-				return err
-			}
 			sourceChunker.SetChunkerReader(bytes.NewReader(metadataBytes))
 		} else {
 			file, err = os.Open(path)
@@ -198,32 +212,20 @@ func pushFileListDiffWorkspace(conn *grpc.ClientConn, ownerUsername string, proj
 		}
 
 		err = sourceChunker.CreateDelta(job.Hashes, func(chunk *jampb.Chunk) error {
-			written = written + len(chunk.Data)
-			if written > 1024*1024 {
-				wg.Add(1)
-				writeOps := make([]*jampb.FileWriteOperation, len(operations))
-				copy(writeOps, operations)
-				go func(writeOps []*jampb.FileWriteOperation) {
-					_, err := jampb.NewJamHubClient(conn).WriteWorkspaceOperations(ctx, &jampb.WriteWorkspaceOperationsRequest{
-						OperationToken: tokenResp.Token,
-						Operations:     writeOps,
-					}, grpc.UseCompressor(gzip.Name))
-					if err != nil {
-						panic(err)
-					}
-					for _, op := range writeOps {
-						bar.Write(op.Chunk.Data)
-					}
-					wg.Done()
-				}(writeOps)
-				written = 0
-				operations = operations[:0]
-			}
-			operations = append(operations, &jampb.FileWriteOperation{
-				PathHash: pathToHash(path),
-				Chunk:    chunk,
+			err = operationStream.Send(&jampb.WriteWorkspaceOperationsRequest{
+				OperationToken: tokenResp.Token,
+				Operations: []*jampb.FileWriteOperation{
+					{
+						PathHash: pathToHash(path),
+						Chunk:    chunk,
+					},
+				},
 			})
-			written += len(chunk.Data)
+			if err != nil {
+				return err
+			}
+
+			bar.Write(chunk.Data)
 			return nil
 		})
 		if err != nil {
@@ -239,22 +241,11 @@ func pushFileListDiffWorkspace(conn *grpc.ClientConn, ownerUsername string, proj
 		}
 	}
 
-	wg.Add(1)
-	go func() {
-		_, err = jampb.NewJamHubClient(conn).WriteWorkspaceOperations(ctx, &jampb.WriteWorkspaceOperationsRequest{
-			OperationToken: tokenResp.Token,
-			Operations:     operations,
-		}, grpc.UseCompressor(gzip.Name))
-		if err != nil {
-			panic(err)
-		}
-		for _, op := range operations {
-			bar.Write(op.Chunk.Data)
-		}
-		wg.Done()
-	}()
+	_, err = operationStream.CloseAndRecv()
+	if err != nil {
+		return err
+	}
 
-	wg.Wait()
 	bar.Finish()
 
 	return nil
@@ -281,7 +272,7 @@ func ApplyFileListDiffCommit(apiClient jampb.JamHubClient, ownerUsername string,
 		return nil
 	}
 
-	bar := progressbar.Default(numFiles, "Downloading")
+	bar := progressbar.DefaultBytes(-1, "Downloading")
 	for path, diff := range fileMetadataDiff.GetDiffs() {
 		if diff.GetType() != jampb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
 			if diff.GetType() == jampb.FileMetadataDiff_Delete {
@@ -289,7 +280,6 @@ func ApplyFileListDiffCommit(apiClient jampb.JamHubClient, ownerUsername string,
 				if err != nil {
 					panic(err)
 				}
-				bar.ChangeMax(bar.GetMax() - 1)
 			} else {
 				currFile, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0755)
 				if err != nil {
@@ -339,7 +329,7 @@ func ApplyFileListDiffCommit(apiClient jampb.JamHubClient, ownerUsername string,
 				}()
 
 				currFile.Seek(0, 0)
-				err = targetChunker.ApplyDelta(tempFile, currFile, ops)
+				err = targetChunker.ApplyDelta(io.MultiWriter(tempFile, bar), currFile, ops)
 				if err != nil {
 					panic(err)
 				}
@@ -357,7 +347,6 @@ func ApplyFileListDiffCommit(apiClient jampb.JamHubClient, ownerUsername string,
 				if err != nil {
 					panic(err)
 				}
-				bar.Add(1)
 			}
 		}
 	}
@@ -391,6 +380,7 @@ func ApplyFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername stri
 	if err != nil {
 		return err
 	}
+	bar := progressbar.DefaultBytes(-1, "Downloading")
 	for path, diff := range fileMetadataDiff.GetDiffs() {
 		if diff.GetType() != jampb.FileMetadataDiff_NoOp && !diff.GetFile().GetDir() {
 			if diff.GetType() == jampb.FileMetadataDiff_Delete {
@@ -444,7 +434,7 @@ func ApplyFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername stri
 				}
 
 				currFile.Seek(0, 0)
-				err = targetChunker.ApplyDelta(tempFile, currFile, ops)
+				err = targetChunker.ApplyDelta(io.MultiWriter(tempFile, bar), currFile, ops)
 				if err != nil {
 					return err
 				}
@@ -465,11 +455,12 @@ func ApplyFileListDiffWorkspace(apiClient jampb.JamHubClient, ownerUsername stri
 			}
 		}
 	}
+	bar.Finish()
 
 	return nil
 }
 
-func DiffRemoteToLocalCommit(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, localFileMetadata *jampb.FileMetadata) (*jampb.FileMetadataDiff, error) {
+func diffRemoteToLocalCommit(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, localFileMetadata *jampb.FileMetadata) (*jampb.FileMetadataDiff, error) {
 	metadataBytes, err := proto.Marshal(localFileMetadata)
 	if err != nil {
 		return nil, err
@@ -486,40 +477,12 @@ func DiffRemoteToLocalCommit(apiClient jampb.JamHubClient, ownerUsername string,
 	if err != nil {
 		return nil, err
 	}
+	sort.Sort(jamfilelist.PathFileList(remoteFileMetadata.Files))
 
-	fileMetadataDiff := make(map[string]*jampb.FileMetadataDiff_FileDiff, len(localFileMetadata.GetFiles()))
-	for filePath := range localFileMetadata.GetFiles() {
-		fileMetadataDiff[filePath] = &jampb.FileMetadataDiff_FileDiff{
-			Type: jampb.FileMetadataDiff_Delete,
-		}
-	}
-
-	for filePath, file := range remoteFileMetadata.GetFiles() {
-		var diffFile *jampb.File
-		diffType := jampb.FileMetadataDiff_Delete
-		remoteFile, found := localFileMetadata.GetFiles()[filePath]
-		if found && proto.Equal(file, remoteFile) {
-			diffType = jampb.FileMetadataDiff_NoOp
-		} else if found {
-			diffFile = file
-			diffType = jampb.FileMetadataDiff_Update
-		} else {
-			diffFile = file
-			diffType = jampb.FileMetadataDiff_Create
-		}
-
-		fileMetadataDiff[filePath] = &jampb.FileMetadataDiff_FileDiff{
-			Type: diffType,
-			File: diffFile,
-		}
-	}
-
-	return &jampb.FileMetadataDiff{
-		Diffs: fileMetadataDiff,
-	}, err
+	return jamfilelist.Diff(localFileMetadata, remoteFileMetadata), nil
 }
 
-func DiffRemoteToLocalWorkspace(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, fileMetadata *jampb.FileMetadata) (*jampb.FileMetadataDiff, error) {
+func diffRemoteToLocalWorkspace(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, workspaceId uint64, changeId uint64, fileMetadata *jampb.FileMetadata) (*jampb.FileMetadataDiff, error) {
 	metadataBytes, err := proto.Marshal(fileMetadata)
 	if err != nil {
 		return nil, err
@@ -536,37 +499,9 @@ func DiffRemoteToLocalWorkspace(apiClient jampb.JamHubClient, ownerUsername stri
 	if err != nil {
 		return nil, err
 	}
+	sort.Sort(jamfilelist.PathFileList(remoteFileMetadata.Files))
 
-	fileMetadataDiff := make(map[string]*jampb.FileMetadataDiff_FileDiff, len(fileMetadata.GetFiles()))
-	for filePath := range fileMetadata.GetFiles() {
-		fileMetadataDiff[filePath] = &jampb.FileMetadataDiff_FileDiff{
-			Type: jampb.FileMetadataDiff_Delete,
-		}
-	}
-
-	for filePath, file := range remoteFileMetadata.GetFiles() {
-		var diffFile *jampb.File
-		diffType := jampb.FileMetadataDiff_Delete
-		remoteFile, found := fileMetadata.GetFiles()[filePath]
-		if found && proto.Equal(file, remoteFile) {
-			diffType = jampb.FileMetadataDiff_NoOp
-		} else if found {
-			diffFile = file
-			diffType = jampb.FileMetadataDiff_Update
-		} else {
-			diffFile = file
-			diffType = jampb.FileMetadataDiff_Create
-		}
-
-		fileMetadataDiff[filePath] = &jampb.FileMetadataDiff_FileDiff{
-			Type: diffType,
-			File: diffFile,
-		}
-	}
-
-	return &jampb.FileMetadataDiff{
-		Diffs: fileMetadataDiff,
-	}, err
+	return jamfilelist.Diff(fileMetadata, remoteFileMetadata), nil
 }
 
 func diffLocalToRemoteCommit(apiClient jampb.JamHubClient, ownerUsername string, projectId uint64, commitId uint64, fileMetadata *jampb.FileMetadata) (*jampb.FileMetadataDiff, error) {
@@ -586,40 +521,12 @@ func diffLocalToRemoteCommit(apiClient jampb.JamHubClient, ownerUsername string,
 	if err != nil {
 		return nil, err
 	}
+	sort.Sort(jamfilelist.PathFileList(remoteFileMetadata.Files))
 
-	fileMetadataDiff := make(map[string]*jampb.FileMetadataDiff_FileDiff, len(remoteFileMetadata.GetFiles()))
-	for remoteFilePath := range remoteFileMetadata.GetFiles() {
-		fileMetadataDiff[remoteFilePath] = &jampb.FileMetadataDiff_FileDiff{
-			Type: jampb.FileMetadataDiff_Delete,
-		}
-	}
-
-	for filePath, file := range fileMetadata.GetFiles() {
-		var diffFile *jampb.File
-		diffType := jampb.FileMetadataDiff_Delete
-		remoteFile, found := remoteFileMetadata.GetFiles()[filePath]
-		if found && proto.Equal(file, remoteFile) {
-			diffType = jampb.FileMetadataDiff_NoOp
-		} else if found {
-			diffFile = file
-			diffType = jampb.FileMetadataDiff_Update
-		} else {
-			diffFile = file
-			diffType = jampb.FileMetadataDiff_Create
-		}
-
-		fileMetadataDiff[filePath] = &jampb.FileMetadataDiff_FileDiff{
-			Type: diffType,
-			File: diffFile,
-		}
-	}
-
-	return &jampb.FileMetadataDiff{
-		Diffs: fileMetadataDiff,
-	}, err
+	return jamfilelist.Diff(remoteFileMetadata, fileMetadata), nil
 }
 
-func DiffLocalToRemoteWorkspace(apiClient jampb.JamHubClient, ownerId string, projectId uint64, workspaceId uint64, changeId uint64, fileMetadata *jampb.FileMetadata) (*jampb.FileMetadataDiff, error) {
+func diffLocalToRemoteWorkspace(apiClient jampb.JamHubClient, ownerId string, projectId uint64, workspaceId uint64, changeId uint64, fileMetadata *jampb.FileMetadata) (*jampb.FileMetadataDiff, error) {
 	metadataBytes, err := proto.Marshal(fileMetadata)
 	if err != nil {
 		return nil, err
@@ -636,35 +543,7 @@ func DiffLocalToRemoteWorkspace(apiClient jampb.JamHubClient, ownerId string, pr
 	if err != nil {
 		return nil, err
 	}
+	sort.Sort(jamfilelist.PathFileList(remoteFileMetadata.Files))
 
-	fileMetadataDiff := make(map[string]*jampb.FileMetadataDiff_FileDiff, len(remoteFileMetadata.GetFiles()))
-	for remoteFilePath := range remoteFileMetadata.GetFiles() {
-		fileMetadataDiff[remoteFilePath] = &jampb.FileMetadataDiff_FileDiff{
-			Type: jampb.FileMetadataDiff_Delete,
-		}
-	}
-
-	for filePath, file := range fileMetadata.GetFiles() {
-		var diffFile *jampb.File
-		diffType := jampb.FileMetadataDiff_Delete
-		remoteFile, found := remoteFileMetadata.GetFiles()[filePath]
-		if found && proto.Equal(file, remoteFile) {
-			diffType = jampb.FileMetadataDiff_NoOp
-		} else if found {
-			diffFile = file
-			diffType = jampb.FileMetadataDiff_Update
-		} else {
-			diffFile = file
-			diffType = jampb.FileMetadataDiff_Create
-		}
-
-		fileMetadataDiff[filePath] = &jampb.FileMetadataDiff_FileDiff{
-			Type: diffType,
-			File: diffFile,
-		}
-	}
-
-	return &jampb.FileMetadataDiff{
-		Diffs: fileMetadataDiff,
-	}, err
+	return jamfilelist.Diff(remoteFileMetadata, fileMetadata), nil
 }

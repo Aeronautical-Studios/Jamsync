@@ -59,7 +59,7 @@ func View() {
 		}
 
 		fileMetadata := ReadLocalFileList()
-		remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, requestedChangeId, fileMetadata)
+		remoteToLocalDiff, err := diffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, requestedChangeId, fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -100,7 +100,7 @@ func View() {
 		}
 
 		fileMetadata := ReadLocalFileList()
-		remoteToLocalDiff, err := DiffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, requestedCommitId, fileMetadata)
+		remoteToLocalDiff, err := diffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, requestedCommitId, fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}

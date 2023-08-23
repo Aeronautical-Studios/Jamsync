@@ -50,6 +50,7 @@ func DownloadCommittedFile(client jampb.JamHubClient, ownerUsername string, proj
 	}()
 
 	localReader.Seek(0, 0)
+	localChunker.SetChunkerReader(localReader)
 	err = localChunker.ApplyDelta(localWriter, localReader, chunks)
 	if err != nil {
 		return err
@@ -102,6 +103,7 @@ func DownloadWorkspaceFile(client jampb.JamHubClient, ownerUsername string, proj
 	}()
 
 	localReader.Seek(0, 0)
+	localChunker.SetChunkerReader(localReader)
 	err = localChunker.ApplyDelta(localWriter, localReader, chunks)
 	if err != nil {
 		return err

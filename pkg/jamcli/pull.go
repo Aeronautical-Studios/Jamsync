@@ -36,15 +36,27 @@ func Pull() {
 	defer closer()
 	apiClient := jampb.NewJamHubClient(conn)
 
-	fmt.Println("Pulling changes from Jam...")
+	fileMetadata := ReadLocalFileList()
+	if state.CommitInfo != nil {
+		// Compare to remote commit at the current commit
+		localToRemoteDiff, err := diffLocalToRemoteCommit(apiClient, state.OwnerUsername, state.ProjectId, state.CommitInfo.CommitId, fileMetadata)
+		if err != nil {
+			log.Panic(err)
+		}
+
+		if DiffHasChanges(localToRemoteDiff) {
+			fmt.Println("Some changes locally have not been pushed. Use `jam workon <workspace name>` to push and merge your current changes.")
+			return
+		}
+	}
+
 	if state.CommitInfo == nil {
 		changeResp, err := apiClient.GetWorkspaceCurrentChange(context.Background(), &jampb.GetWorkspaceCurrentChangeRequest{OwnerUsername: state.OwnerUsername, ProjectId: state.ProjectId, WorkspaceId: state.WorkspaceInfo.WorkspaceId})
 		if err != nil {
 			panic(err)
 		}
 
-		fileMetadata := ReadLocalFileList()
-		remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.GetChangeId(), fileMetadata)
+		remoteToLocalDiff, err := diffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, changeResp.GetChangeId(), fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -79,8 +91,7 @@ func Pull() {
 			panic(err)
 		}
 
-		fileMetadata := ReadLocalFileList()
-		remoteToLocalDiff, err := DiffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, commitResp.CommitId, fileMetadata)
+		remoteToLocalDiff, err := diffRemoteToLocalCommit(apiClient, state.OwnerUsername, state.ProjectId, commitResp.CommitId, fileMetadata)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -92,7 +103,7 @@ func Pull() {
 			}
 			for key, val := range remoteToLocalDiff.GetDiffs() {
 				if val.Type != jampb.FileMetadataDiff_NoOp {
-					fmt.Println("Pulled", key)
+					fmt.Println("Pulled", key, val.Type, val.File.Dir, val.File.Hash)
 				}
 			}
 		} else {

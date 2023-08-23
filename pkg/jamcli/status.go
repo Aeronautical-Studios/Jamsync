@@ -66,7 +66,7 @@ func Status() {
 
 		if changeResp.ChangeId == state.WorkspaceInfo.ChangeId {
 			fileMetadata := ReadLocalFileList()
-			localToRemoteDiff, err := DiffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+			localToRemoteDiff, err := diffLocalToRemoteWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -84,7 +84,7 @@ func Status() {
 			}
 		} else if changeResp.ChangeId > state.WorkspaceInfo.ChangeId {
 			fileMetadata := ReadLocalFileList()
-			remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+			remoteToLocalDiff, err := diffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 			if err != nil {
 				log.Panic(err)
 			}

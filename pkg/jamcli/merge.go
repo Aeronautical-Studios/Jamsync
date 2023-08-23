@@ -40,7 +40,7 @@ func Merge() {
 
 	fileMetadata := ReadLocalFileList()
 	apiClient := jampb.NewJamHubClient(conn)
-	remoteToLocalDiff, err := DiffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
+	remoteToLocalDiff, err := diffRemoteToLocalWorkspace(apiClient, state.OwnerUsername, state.ProjectId, state.WorkspaceInfo.WorkspaceId, state.WorkspaceInfo.ChangeId, fileMetadata)
 	if err != nil {
 		log.Panic(err)
 	}
