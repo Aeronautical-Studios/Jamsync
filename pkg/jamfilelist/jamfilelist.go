@@ -1,8 +1,6 @@
 package jamfilelist
 
 import (
-	"encoding/hex"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -35,6 +33,9 @@ func Diff(have *jampb.FileMetadata, want *jampb.FileMetadata) *jampb.FileMetadat
 	haveFileList := PathFileList(have.Files)
 	wantFileList := PathFileList(want.Files)
 
+	sort.Sort(haveFileList)
+	sort.Sort(wantFileList)
+
 	fileMetadataDiff := make(map[string]*jampb.FileMetadataDiff_FileDiff, len(haveFileList))
 	for _, pathFile := range haveFileList {
 		fileMetadataDiff[pathFile.Path] = &jampb.FileMetadataDiff_FileDiff{
@@ -49,7 +50,6 @@ func Diff(have *jampb.FileMetadata, want *jampb.FileMetadata) *jampb.FileMetadat
 		if haveFile != nil && proto.Equal(wantFile.File, haveFile.File) {
 			diffType = jampb.FileMetadataDiff_NoOp
 		} else if haveFile != nil {
-			fmt.Println("wjasdkl", hex.EncodeToString([]byte(wantFile.Path)), wantFile, haveFile)
 			diffFile = wantFile.File
 			diffType = jampb.FileMetadataDiff_Update
 		} else {

@@ -41,7 +41,9 @@ type JamHub struct {
 }
 
 func Hostname() string {
-	if jamenv.Env() == jamenv.Local {
+	if jamenv.Env() == jamenv.Local && jamsite.Site() == jamsite.Office {
+		return "jamhub.local:14357"
+	} else if jamenv.Env() == jamenv.Local {
 		return "0.0.0.0:14357"
 	}
 	return jamsite.Site().String() + "-" + jamenv.Env().String() + "-jamhubgrpc.jamhub.dev:443"

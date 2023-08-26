@@ -1,10 +1,20 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"flag"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
 	"os"
+	"runtime"
 
+	"github.com/fynelabs/selfupdate"
 	"github.com/zdgeier/jam/pkg/jamcli"
+	"github.com/zdgeier/jam/pkg/jamenv"
+	"github.com/zdgeier/jam/pkg/jamsite"
 )
 
 var (
@@ -36,6 +46,52 @@ func main() {
 	// 	panic(err)
 	// }
 	// defer trace.Stop()
+
+	if jamenv.Env() != jamenv.Local {
+		vresp, err := http.Get(jamsite.Host() + "/currentversion")
+		if err != nil {
+			panic(err)
+		}
+		defer vresp.Body.Close()
+
+		vb, err := io.ReadAll(vresp.Body)
+		if err != nil {
+			log.Panic(err)
+		}
+		if string(vb) != version && (len(os.Args) == 1 || os.Args[1] != "upgrade") {
+			fmt.Println("Looks like there's a new version. Updating to v" + string(vb) + ".")
+			resp, err := http.Get(jamsite.Host() + "/clients/" + string(vb) + "/jam_" + runtime.GOOS + "_" + runtime.GOARCH + ".zip")
+			if err != nil {
+				panic(err)
+			}
+			defer resp.Body.Close()
+
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				log.Panic(err)
+			}
+
+			reader := bytes.NewReader(b)
+			zipReader, err := zip.NewReader(reader, int64(len(b)))
+			if err != nil {
+				panic(err)
+			}
+
+			f, err := zipReader.Open("jam")
+			if err != nil {
+				panic(err)
+			}
+
+			err = selfupdate.Apply(f, selfupdate.Options{})
+			if err != nil {
+				panic(err)
+			}
+
+			fmt.Println("Done. Back to jammin'!")
+			os.Exit(1)
+		}
+	}
+
 	flag.Parse()
 
 	switch {
@@ -69,6 +125,8 @@ func main() {
 		jamcli.ListWorkspaces()
 	case os.Args[1] == "projects":
 		jamcli.ListProjects()
+	case os.Args[1] == "upgrade":
+		jamcli.Upgrade()
 	case os.Args[1] == "logout":
 		jamcli.Logout()
 	default:

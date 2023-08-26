@@ -32,12 +32,25 @@ func Authorize() (AuthFile, error) {
 		token := ""
 		if os.Args[1] == "login" && len(os.Args) > 2 && os.Args[2] != "" && jamenv.Env() == jamenv.Local {
 			token = os.Args[2]
+			conn, closer, err := jamgrpc.Connect(&oauth2.Token{
+				AccessToken: string(token),
+			})
+			if err != nil {
+				log.Panic(err)
+			}
+			defer closer()
+			_, err = jampb.NewJamHubClient(conn).CreateUser(context.Background(), &jampb.CreateUserRequest{
+				Username: token,
+			})
+			if err != nil {
+				log.Panic(err)
+			}
 		} else if jamenv.Env() == jamenv.Local {
 			if len(os.Args) < 3 {
-				fmt.Println("Use `JAM_ENV=local jam login <username>`")
+				fmt.Println("Use `jam login <username>`")
 				os.Exit(1)
 			} else {
-				fmt.Println("No ~/.jamhubauth file. Login with `JAM_ENV=local jam login <username>` first")
+				fmt.Println("No ~/.jamhubauth file. Login with `jam login <username>` first")
 				os.Exit(1)
 			}
 		} else {

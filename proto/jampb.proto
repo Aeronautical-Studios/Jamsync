@@ -161,12 +161,6 @@ message GetProjectIdResponse {
     uint64 project_id = 1;
 }
 
-message EditorStreamMessage{
-    uint64 project_id = 1;
-    string owner_username  = 2;
-    bytes update_data = 3;
-}
-
 message WriteWorkspaceOperationsResponse{}
 
 message FileMetadataDiff {
