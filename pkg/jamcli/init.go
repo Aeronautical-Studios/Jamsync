@@ -63,14 +63,14 @@ func InitNewProject(conn *grpc.ClientConn, projectName string) {
 		panic(err)
 	}
 
-	// _, err = apiClient.DeleteWorkspace(context.Background(), &jampb.DeleteWorkspaceRequest{
-	// 	OwnerUsername: resp.GetOwnerUsername(),
-	// 	ProjectId:     resp.GetProjectId(),
-	// 	WorkspaceId:   workspaceResp.WorkspaceId,
-	// })
-	// if err != nil {
-	// 	log.Panic(err)
-	// }
+	_, err = apiClient.DeleteWorkspace(context.Background(), &jampb.DeleteWorkspaceRequest{
+		OwnerUsername: resp.GetOwnerUsername(),
+		ProjectId:     resp.GetProjectId(),
+		WorkspaceId:   workspaceResp.WorkspaceId,
+	})
+	if err != nil {
+		log.Panic(err)
+	}
 
 	err = statefile.StateFile{
 		OwnerUsername: resp.OwnerUsername,
