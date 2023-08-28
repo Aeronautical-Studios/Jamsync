@@ -128,6 +128,38 @@ func (s JamHub) AddCollaborator(ctx context.Context, in *jampb.AddCollaboratorRe
 	return &jampb.AddCollaboratorResponse{}, nil
 }
 
+func (s JamHub) RemoveCollaborator(ctx context.Context, in *jampb.RemoveCollaboratorRequest) (*jampb.RemoveCollaboratorResponse, error) {
+	userId, err := serverauth.ParseIdFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if in.GetOwnerUsername() == "" {
+		return nil, errors.New("must provide owner id")
+	}
+
+	currentUsername, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), currentUsername)
+	if err != nil {
+		return nil, err
+	}
+
+	if !accessible {
+		return nil, errors.New("not an owner or collaborator of this project")
+	}
+
+	err = s.db.RemoveCollaborator(in.GetProjectId(), in.GetUsername())
+	if err != nil {
+		return nil, err
+	}
+
+	return &jampb.RemoveCollaboratorResponse{}, nil
+}
+
 func (s JamHub) ListUserProjects(ctx context.Context, in *jampb.ListUserProjectsRequest) (*jampb.ListUserProjectsResponse, error) {
 	id, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {

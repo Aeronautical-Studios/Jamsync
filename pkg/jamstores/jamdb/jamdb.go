@@ -91,6 +91,11 @@ func (j LocalStore) AddCollaborator(projectId uint64, collabUsername string) err
 	return err
 }
 
+func (j LocalStore) RemoveCollaborator(projectId uint64, collabUsername string) error {
+	_, err := j.db.Exec("DELETE FROM collaborators WHERE project_id = ? AND username = ?", projectId, collabUsername)
+	return err
+}
+
 func (j LocalStore) ListCollaborators(projectId uint64) ([]string, error) {
 	rows, err := j.db.Query("SELECT username FROM collaborators WHERE project_id = ?", projectId)
 	if err != nil {

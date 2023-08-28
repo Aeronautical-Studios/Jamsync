@@ -11,6 +11,7 @@ service JamHub {
     rpc GetProjectCurrentCommit(GetProjectCurrentCommitRequest) returns (GetProjectCurrentCommitResponse);
     rpc GetProjectName(GetProjectNameRequest) returns (GetProjectNameResponse);
     rpc AddCollaborator(AddCollaboratorRequest) returns (AddCollaboratorResponse);
+    rpc RemoveCollaborator(RemoveCollaboratorRequest) returns (RemoveCollaboratorResponse);
     rpc GetCollaborators(GetCollaboratorsRequest) returns (GetCollaboratorsResponse);
 
     // Change operations
@@ -257,6 +258,13 @@ message AddCollaboratorRequest {
     string username = 3;
 }
 message AddCollaboratorResponse {}
+
+message RemoveCollaboratorRequest {
+    uint64 project_id = 1;
+    string owner_username  = 2;
+    string username = 3;
+}
+message RemoveCollaboratorResponse {}
 
 message AddProjectRequest {
     string project_name = 1;
