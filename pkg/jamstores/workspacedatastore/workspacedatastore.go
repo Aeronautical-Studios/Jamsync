@@ -29,13 +29,14 @@ func (s *LocalStore) GetLocalDB(ownerUsername string, projectId uint64, workspac
 	}
 
 	var conn *sql.DB
-	conn, err = sql.Open("sqlite3", s.filePath(ownerUsername, projectId, workspaceId)+"?cache=shared&mode=rwc&_journal=WAL&_cache_size=16000")
+	conn, err = sql.Open("sqlite3", s.filePath(ownerUsername, projectId, workspaceId)+"?cache=shared&mode=rwc&_journal=WAL")
 	if err != nil {
 		panic(err)
 	}
 
 	sqlStmt := `
-		CREATE TABLE IF NOT EXISTS hashes (path_hash BLOB, hash TEXT, data TEXT, UNIQUE(path_hash, hash));
+		CREATE TABLE IF NOT EXISTS hashes (path_hash BLOB, hash TEXT, data TEXT);
+		CREATE INDEX IF NOT EXISTS path_hash_hash_idx ON hashes(path_hash, hash);
 		CREATE INDEX IF NOT EXISTS path_hash_idx ON hashes(path_hash);
 		`
 	_, err = conn.Exec(sqlStmt)
@@ -51,6 +52,11 @@ func (s *LocalStore) Read(stmt *sql.Stmt, pathHash []byte, hash uint64) ([]byte,
 	var data []byte
 	err := stmt.QueryRow(pathHash, hashString).Scan(&data)
 	return data, err
+}
+
+func (s *LocalStore) ReadInto(stmt *sql.Stmt, pathHash []byte, hash uint64, buf *[]byte) error {
+	hashString := strconv.FormatUint(hash, 10)
+	return stmt.QueryRow(pathHash, hashString).Scan(buf)
 }
 
 func (s *LocalStore) HashExists(conn *sql.DB, pathHash []byte, hash uint64) bool {

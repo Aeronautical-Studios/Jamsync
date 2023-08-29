@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/pprof"
+	"runtime/trace"
 	"sort"
 	"strconv"
 
@@ -982,6 +984,30 @@ func (s JamHub) AddChange(ctx context.Context, in *jampb.AddChangeRequest) (*jam
 }
 
 func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequest) (*jampb.MergeWorkspaceResponse, error) {
+	f, err := os.Create("profile.prof")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	// Start CPU profiling
+	if err := pprof.StartCPUProfile(f); err != nil {
+		panic(err)
+	}
+	defer pprof.StopCPUProfile()
+
+	// Start tracing
+	traceFile, err := os.Create("trace.out")
+	if err != nil {
+		panic(err)
+	}
+	defer traceFile.Close()
+
+	if err := trace.Start(traceFile); err != nil {
+		panic(err)
+	}
+	defer trace.Stop()
+
 	userId, err := serverauth.ParseIdFromCtx(ctx)
 	if err != nil {
 		return nil, err
@@ -1039,28 +1065,6 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 		return nil, err
 	}
 
-	workspaceConn, err := s.workspacedatastore.GetLocalDB(in.OwnerUsername, in.ProjectId, in.WorkspaceId)
-	if err != nil {
-		panic(err)
-	}
-	defer workspaceConn.Close()
-
-	commitConn, err := s.commitdatastore.GetLocalDB(in.OwnerUsername, in.ProjectId)
-	if err != nil {
-		panic(err)
-	}
-	defer commitConn.Close()
-
-	type pathData struct {
-		workspaceData map[uint64][]byte
-		pathHash      []byte
-	}
-
-	type workspaceChunkHashes struct {
-		workspaceChunkHashes []*jampb.ChunkHash
-		pathHash             []byte
-	}
-
 	dbTx, err := db.Begin()
 	if err != nil {
 		panic(err)
@@ -1082,23 +1086,41 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 	}
 	defer query.Close()
 
-	workspaceStmt, err := workspaceConn.Prepare("SELECT data FROM hashes WHERE path_hash = ? AND hash = ?")
+	workspaceDatastoreConn, err := s.workspacedatastore.GetLocalDB(in.OwnerUsername, in.ProjectId, in.WorkspaceId)
+	if err != nil {
+		panic(err)
+	}
+	defer workspaceDatastoreConn.Close()
+
+	workspaceDatastoreTx, err := workspaceDatastoreConn.Begin()
+	if err != nil {
+		panic(err)
+	}
+
+	workspaceDatastoreStmt, err := workspaceDatastoreTx.Prepare("SELECT data FROM hashes WHERE path_hash = ? AND hash = ?")
 	if err != nil {
 		return nil, err
 	}
-	defer workspaceStmt.Close()
+	defer workspaceDatastoreStmt.Close()
 
-	commitTx, err := commitConn.Begin()
+	commitDatastoreConn, err := s.commitdatastore.GetLocalDB(in.OwnerUsername, in.ProjectId)
+	if err != nil {
+		panic(err)
+	}
+	defer commitDatastoreConn.Close()
+
+	commitDatastoreTx, err := commitDatastoreConn.Begin()
 	if err != nil {
 		return nil, err
 	}
 
-	commitStmt, err := commitTx.Prepare("INSERT INTO hashes (path_hash, hash, data) VALUES(?, ?, ?)")
+	commitDatastoreStmt, err := commitDatastoreTx.Prepare("INSERT INTO hashes (path_hash, hash, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return nil, err
 	}
-	defer commitStmt.Close()
+	defer commitDatastoreStmt.Close()
 
+	buf := make([]byte, 1024*1024)
 	for pathHashString := range changedPathHashes {
 		pathHash := []byte(pathHashString)
 
@@ -1108,23 +1130,29 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 		}
 
 		for _, chunkHash := range chunkHashes {
-			workspaceData, err := s.workspacedatastore.Read(workspaceStmt, pathHash, chunkHash.Hash)
+			err := s.workspacedatastore.ReadInto(workspaceDatastoreStmt, pathHash, chunkHash.Hash, &buf)
 			if err != nil {
 				panic(err)
 			}
+			err = s.commitdatastore.Write(commitDatastoreStmt, pathHash, chunkHash.Hash, buf)
+			if err != nil {
+				panic(err)
+			}
+			buf = buf[:0]
 			hashString := strconv.FormatUint(chunkHash.Hash, 10)
 			_, err = insertStmt.Exec(int64(newCommitId), pathHash, hashString, int64(chunkHash.Offset), int64(chunkHash.Length))
-			if err != nil {
-				panic(err)
-			}
-			err = s.commitdatastore.Write(commitStmt, pathHash, chunkHash.Hash, workspaceData)
 			if err != nil {
 				panic(err)
 			}
 		}
 	}
 
-	err = commitTx.Commit()
+	err = workspaceDatastoreTx.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	err = commitDatastoreTx.Commit()
 	if err != nil {
 		return nil, err
 	}
@@ -1138,6 +1166,13 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 	if err != nil {
 		return nil, err
 	}
+
+	hf, err := os.Create("heap.prof")
+	if err != nil {
+		panic(err)
+	}
+	pprof.WriteHeapProfile(hf)
+	defer hf.Close()
 
 	return &jampb.MergeWorkspaceResponse{
 		CommitId: newCommitId,

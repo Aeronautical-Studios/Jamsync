@@ -51,9 +51,9 @@ func Merge(ownerUsername string, projectId uint64, metadataFilePath string, old,
 
 	out, _ := exec.Command("diff3", "-m", minePath, oldPath, theirsPath).Output()
 
-	// os.Remove(oldPath)
-	// os.Remove(minePath)
-	// os.Remove(theirsPath)
+	os.Remove(oldPath)
+	os.Remove(minePath)
+	os.Remove(theirsPath)
 
 	oldString := strings.ReplaceAll(string(out), oldPath, metadataFilePath+".old")
 	mineString := strings.ReplaceAll(string(oldString), minePath, metadataFilePath+".mine")

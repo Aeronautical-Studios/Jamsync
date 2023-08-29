@@ -64,8 +64,6 @@ func UnLock() {
 	fmt.Println("Removed Lock on", cleanpath)
 }
 
-// private methods
-
 // unlock the file given by path
 func unlockFile(apiClient jampb.JamHubClient, username string, projectId uint64, path string) (string, error) {
 	path = filepath.Clean(path)

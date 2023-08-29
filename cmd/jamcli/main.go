@@ -23,30 +23,7 @@ var (
 )
 
 func main() {
-	// f, err := os.Create("profile.prof")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// defer f.Close()
-
-	// // Start CPU profiling
-	// if err := pprof.StartCPUProfile(f); err != nil {
-	// 	panic(err)
-	// }
-	// defer pprof.StopCPUProfile()
-
-	// // Start tracing
-	// traceFile, err := os.Create("trace.out")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// defer traceFile.Close()
-
-	// if err := trace.Start(traceFile); err != nil {
-	// 	panic(err)
-	// }
-	// defer trace.Stop()
-
+	// Automatically update jam if there's a new version
 	if jamenv.Env() != jamenv.Local {
 		vresp, err := http.Get(jamsite.Host() + "/currentversion")
 		if err != nil {
@@ -133,3 +110,27 @@ func main() {
 		jamcli.Help(version, built)
 	}
 }
+
+// f, err := os.Create("profile.prof")
+// if err != nil {
+// 	panic(err)
+// }
+// defer f.Close()
+
+// // Start CPU profiling
+// if err := pprof.StartCPUProfile(f); err != nil {
+// 	panic(err)
+// }
+// defer pprof.StopCPUProfile()
+
+// // Start tracing
+// traceFile, err := os.Create("trace.out")
+// if err != nil {
+// 	panic(err)
+// }
+// defer traceFile.Close()
+
+// if err := trace.Start(traceFile); err != nil {
+// 	panic(err)
+// }
+// defer trace.Stop()

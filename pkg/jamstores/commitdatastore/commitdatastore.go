@@ -21,7 +21,7 @@ func (s *LocalStore) GetLocalDB(ownerUsername string, projectId uint64) (*sql.DB
 	}
 
 	var conn *sql.DB
-	conn, err = sql.Open("sqlite3", s.filePath(ownerUsername, projectId)+"?cache=shared&mode=rwc&_journal=WAL&_cache_size=16000")
+	conn, err = sql.Open("sqlite3", s.filePath(ownerUsername, projectId)+"?cache=shared&mode=rwc&_journal=WAL")
 	if err != nil {
 		panic(err)
 	}
