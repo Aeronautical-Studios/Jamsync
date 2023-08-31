@@ -6,6 +6,7 @@ import (
 
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
+	"github.com/zdgeier/jam/pkg/jamstores/stores"
 )
 
 func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *jampb.GetProjectCurrentCommitRequest) (*jampb.GetProjectCurrentCommitResponse, error) {
@@ -32,13 +33,13 @@ func (s JamHub) GetProjectCurrentCommit(ctx context.Context, in *jampb.GetProjec
 		return nil, errors.New("must be an owner or collaborator to get current commit")
 	}
 
-	db, err := s.projectstore.GetLocalProjectDB(in.GetOwnerUsername(), in.GetProjectId())
+	db, err := stores.GetProjectDB(in.GetOwnerUsername(), in.GetProjectId())
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
 
-	commitId, err := s.projectstore.MaxCommitId(db)
+	commitId, err := stores.MaxCommitId(db)
 	if err != nil {
 		return nil, err
 	}
@@ -73,13 +74,13 @@ func (s JamHub) ReadCommitFileHashes(ctx context.Context, in *jampb.ReadCommitFi
 		return nil, errors.New("must be an owner or collaborator to get current commit")
 	}
 
-	db, err := s.projectstore.GetLocalProjectDB(in.GetOwnerUsername(), in.GetProjectId())
+	db, err := stores.GetProjectDB(in.GetOwnerUsername(), in.GetProjectId())
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
 
-	hashList, err := s.projectstore.ListCommitChunkHashes(db, in.GetCommitId(), in.GetPathHash())
+	hashList, err := stores.ListCommitChunkHashes(db, in.GetCommitId(), in.GetPathHash())
 	if err != nil {
 		return nil, err
 	}
@@ -118,18 +119,18 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 		return errors.New("not a collaborator or owner of this project")
 	}
 
-	db, err := s.projectstore.GetLocalProjectDB(in.GetOwnerUsername(), in.GetProjectId())
+	db, err := stores.GetProjectDB(in.GetOwnerUsername(), in.GetProjectId())
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	actualChunkHashes, err := s.projectstore.ListCommitChunkHashes(db, in.CommitId, in.PathHash)
+	actualChunkHashes, err := stores.ListCommitChunkHashes(db, in.CommitId, in.PathHash)
 	if err != nil {
 		return err
 	}
 
-	conn, err := s.commitdatastore.GetLocalDB(in.OwnerUsername, in.ProjectId)
+	conn, err := stores.GetCommitDataDB(in.OwnerUsername, in.ProjectId)
 	if err != nil {
 		return err
 	}
@@ -155,7 +156,7 @@ func (s JamHub) ReadCommittedFile(in *jampb.ReadCommittedFileRequest, srv jampb.
 				return err
 			}
 		} else {
-			data, err := s.commitdatastore.Read(commitDataStmt, in.PathHash, actualChunk.Hash)
+			data, err := stores.Read(commitDataStmt, in.PathHash, actualChunk.Hash)
 			if err != nil {
 				return err
 			}

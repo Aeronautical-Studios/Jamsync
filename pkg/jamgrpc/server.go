@@ -15,10 +15,7 @@ import (
 	"github.com/zdgeier/jam/pkg/jamenv"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
 	"github.com/zdgeier/jam/pkg/jamsite"
-	"github.com/zdgeier/jam/pkg/jamstores/commitdatastore"
 	"github.com/zdgeier/jam/pkg/jamstores/jamdb"
-	"github.com/zdgeier/jam/pkg/jamstores/projectstore"
-	"github.com/zdgeier/jam/pkg/jamstores/workspacedatastore"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
@@ -33,10 +30,7 @@ import (
 )
 
 type JamHub struct {
-	db                 jamdb.LocalStore
-	workspacedatastore *workspacedatastore.LocalStore
-	commitdatastore    *commitdatastore.LocalStore
-	projectstore       *projectstore.LocalStore
+	db jamdb.LocalStore
 	jampb.UnimplementedJamHubServer
 }
 
@@ -69,10 +63,7 @@ func interceptorLogger(l *log.Logger) logging.Logger {
 
 func New() (closer func(), err error) {
 	jamhub := JamHub{
-		db:                 jamdb.NewLocalStore(),
-		workspacedatastore: workspacedatastore.NewLocalStore(),
-		commitdatastore:    commitdatastore.NewLocalStore(),
-		projectstore:       projectstore.NewLocalStore(),
+		db: jamdb.NewLocalStore(),
 	}
 
 	var customFunc recovery.RecoveryHandlerFunc = func(p any) (err error) {
@@ -83,10 +74,8 @@ func New() (closer func(), err error) {
 
 	loggerOpts := []logging.Option{
 		logging.WithLogOnEvents(logging.StartCall, logging.FinishCall),
-		// Add any other option (check functions starting with logging.With).
 	}
 
-	// Shared options for the logger, with a custom gRPC code to log level function.
 	recoverOpts := []recovery.Option{
 		recovery.WithRecoveryHandler(customFunc),
 	}
@@ -94,7 +83,6 @@ func New() (closer func(), err error) {
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(serverauth.EnsureValidToken),
 		grpc.ChainUnaryInterceptor(
-			// Order matters e.g. tracing interceptor have to create span first for the later exemplars to work.
 			logging.UnaryServerInterceptor(interceptorLogger(logger), loggerOpts...),
 			recovery.UnaryServerInterceptor(recoverOpts...),
 		),
