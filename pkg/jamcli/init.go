@@ -58,6 +58,7 @@ func InitNewProject(conn *grpc.ClientConn, projectName string) {
 		ProjectId:     resp.GetProjectId(),
 		OwnerUsername: resp.GetOwnerUsername(),
 		WorkspaceId:   workspaceResp.WorkspaceId,
+		MergeMessage: "Initial commit",
 	})
 	if err != nil {
 		panic(err)

@@ -182,6 +182,7 @@ message MergeWorkspaceRequest {
     uint64 project_id = 1;
     string owner_username  = 2;
     uint64 workspace_id = 3;
+    string merge_message = 4;
 }
 message MergeWorkspaceResponse {
     uint64 commit_id = 1;
