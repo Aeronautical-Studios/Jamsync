@@ -73,7 +73,7 @@ func Authorize() (AuthFile, error) {
 		apiClient := jampb.NewJamHubClient(conn)
 		resp, err := apiClient.CurrentUser(ctx, &jampb.CurrentUserRequest{})
 		if err != nil {
-			fmt.Println("Log into the website first to create your account.")
+			fmt.Println(err, "Log into the website first to create your account.")
 		}
 
 		authFile := AuthFile{

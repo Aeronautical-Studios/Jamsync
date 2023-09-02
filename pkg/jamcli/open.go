@@ -86,7 +86,7 @@ func Open() {
 		if err != nil {
 			panic(err)
 		}
-		err = browser.OpenURL(url + username + "/" + nameResp.ProjectName + "/browse/" + workspaceNameResp.GetWorkspaceName() + "/")
+		err = browser.OpenURL(url + username + "/" + nameResp.ProjectName + "/browse/?workspaceName=" + workspaceNameResp.GetWorkspaceName())
 		if err != nil {
 			panic(err)
 		}
