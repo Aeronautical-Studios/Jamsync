@@ -14,6 +14,11 @@ import (
 )
 
 func Merge() {
+	if len(os.Args) != 3 {
+		fmt.Println("Missing argument. `jam merge \"message\"`")
+		os.Exit(1)
+	}
+
 	state, err := statefile.Find()
 	if err != nil {
 		fmt.Println("Could not find a `.jam` file. Run `jam init` to initialize the project.")
@@ -50,10 +55,12 @@ func Merge() {
 		return
 	}
 
+	mergeMessage := os.Args[2]
 	resp, err := apiClient.MergeWorkspace(context.Background(), &jampb.MergeWorkspaceRequest{
 		OwnerUsername: state.OwnerUsername,
 		ProjectId:     state.ProjectId,
 		WorkspaceId:   state.WorkspaceInfo.WorkspaceId,
+		MergeMessage: mergeMessage,
 	})
 	if err != nil {
 		fmt.Println("Workspace is not up to date with latest mainline changes. Use `jam update` to update to the workspace.")

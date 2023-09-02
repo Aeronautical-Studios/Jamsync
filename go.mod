@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/auth0/go-jwt-middleware/v2 v2.1.0
+	github.com/fynelabs/selfupdate v0.2.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/nirasan/go-oauth-pkce-code-verifier v0.0.0-20220510032225-4f9f17eaec4c

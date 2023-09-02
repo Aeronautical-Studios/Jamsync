@@ -24,7 +24,7 @@ func GetProjectDB(ownerUsername string, projectId uint64) (*sql.DB, error) {
 	}
 
 	sqlStmt := `
-	CREATE TABLE IF NOT EXISTS commits (timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+	CREATE TABLE IF NOT EXISTS commits (timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, message TEXT);
 	CREATE TABLE IF NOT EXISTS commit_chunk_hashes (commit_id INTEGER, path_hash BLOB, hash TEXT, offset INTEGER, length INTEGER);
 	CREATE TABLE IF NOT EXISTS workspaces (name TEXT, baseCommitId INTEGER, deleted INTEGER, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
 	CREATE TABLE IF NOT EXISTS changes (change_id INTEGER, workspace_id INTEGER, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
@@ -46,8 +46,8 @@ func GetProjectDB(ownerUsername string, projectId uint64) (*sql.DB, error) {
 	return conn, nil
 }
 
-func AddCommit(db *sql.DB) (uint64, error) {
-	res, err := db.Exec("INSERT INTO commits (timestamp) VALUES (datetime('now'))")
+func AddCommit(db *sql.DB, message string) (uint64, error) {
+	res, err := db.Exec("INSERT INTO commits (timestamp, message) VALUES (datetime('now'), ?)", message)
 	if err != nil {
 		return 0, err
 	}

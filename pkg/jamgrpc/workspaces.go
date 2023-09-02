@@ -1026,7 +1026,7 @@ func (s JamHub) MergeWorkspace(ctx context.Context, in *jampb.MergeWorkspaceRequ
 		return nil, err
 	}
 
-	newCommitId, err := stores.AddCommit(projectDb)
+	newCommitId, err := stores.AddCommit(projectDb, in.GetMergeMessage())
 	if err != nil {
 		return nil, err
 	}
