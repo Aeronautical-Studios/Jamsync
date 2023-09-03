@@ -33,15 +33,15 @@ func (s JamHub) UpdateFileLock(ctx context.Context, in *jampb.UpdateFileLockRequ
 	}
 
 	if in.GetLockUnlockFlag() {
-		err = s.db.CreateFileLock(in.GetProjectId(), username, in.GetB64EncodedPath(), in.GetIsDir())
+		err = s.db.CreateFileLock(in.GetProjectId(), username, in.GetPath(), in.GetIsDir())
 	} else {
-		err = s.db.DeleteFileLock(in.GetProjectId(), username, in.GetB64EncodedPath())
+		err = s.db.DeleteFileLock(in.GetProjectId(), username, in.GetPath())
 	}
 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &jampb.UpdateFileLockResponse{
 		IsLocked: in.GetLockUnlockFlag(),
 	}, err
@@ -71,7 +71,7 @@ func (s JamHub) GetFileLock(ctx context.Context, in *jampb.GetFileLockRequest) (
 		return nil, errors.New("must be an owner or collaborator to get file lock")
 	}
 
-	isLocked, err := s.db.GetFileLock(in.GetProjectId(), username, in.GetB64EncodedPath())
+	isLocked, err := s.db.GetFileLock(in.GetProjectId(), username, in.GetPath())
 	if err != nil {
 		return nil, err
 	}
@@ -114,10 +114,10 @@ func (s JamHub) ListFileLocks(ctx context.Context, in *jampb.ListFileLocksReques
 	lockedFilesProto := make([]*jampb.FileLock, len(lockedFiles))
 	for i, lock := range lockedFiles {
 		lockedFilesProto[i] = &jampb.FileLock{
-			ProjectId: lock.ProjectId,
+			ProjectId:     lock.ProjectId,
 			OwnerUsername: lock.Username,
-			B64EncodedPath: lock.B64EncodedPath,
-			IsDir: lock.IsDir,
+			Path:          lock.Path,
+			IsDir:         lock.IsDir,
 		}
 	}
 
@@ -139,7 +139,7 @@ func (s JamHub) deleteFileLocks(projectId uint64) error {
 	}
 
 	for _, lock := range locks {
-		s.db.DeleteFileLock(projectId, lock.Username, lock.B64EncodedPath)
+		s.db.DeleteFileLock(projectId, lock.Username, lock.Path)
 	}
 
 	return nil
