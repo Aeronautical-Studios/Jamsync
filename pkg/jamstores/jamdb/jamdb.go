@@ -12,10 +12,10 @@ type LocalStore struct {
 }
 
 type FileLock struct {
-	ProjectId      uint64
-	Username       string
-	B64EncodedPath string
-	IsDir          bool
+	ProjectId uint64
+	Username  string
+	Path      string
+	IsDir     bool
 }
 
 func NewLocalStore() (db LocalStore) {
@@ -297,7 +297,7 @@ func (j LocalStore) ListFileLocks(projectId uint64) ([]FileLock, error) {
 	data := make([]FileLock, 0)
 	for rows.Next() {
 		u := FileLock{}
-		err = rows.Scan(&u.ProjectId, &u.Username, &u.B64EncodedPath, &u.IsDir)
+		err = rows.Scan(&u.ProjectId, &u.Username, &u.Path, &u.IsDir)
 		if err != nil {
 			return nil, err
 		}
