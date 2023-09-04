@@ -68,7 +68,7 @@ message GetOperationStreamTokenResponse {
 message GetFileLockRequest {
     uint64 project_id = 1;
     string owner_username = 2;
-    string b64_encoded_path = 3;
+    string path = 3;
     bool is_dir = 4;
 }
 
@@ -79,7 +79,7 @@ message GetFileLockResponse {
 message UpdateFileLockRequest {
     uint64 project_id = 1;
     string owner_username = 2;
-    string b64_encoded_path = 3;
+    string path = 3;
     bool is_dir = 4;
     bool lock_unlock_flag = 5;
 }
@@ -100,7 +100,7 @@ message ListFileLocksResponse {
 message FileLock {
     uint64 project_id = 1;
     string owner_username = 2;
-    string b64_encoded_path = 3;
+    string path = 3;
     bool is_dir = 4;
 }
 
