@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"sort"
@@ -508,7 +507,6 @@ func (s JamHub) ReadWorkspaceFile(in *jampb.ReadWorkspaceFileRequest, srv jampb.
 		} else {
 			data, err := stores.Read(workspaceDataStmt, in.PathHash, chunk.Hash)
 			if err != nil || len(data) == 0 {
-				fmt.Println("workspace data not found, trying commit data")
 				data, err = stores.Read(commitDataStmt, in.PathHash, chunk.Hash)
 				if err != nil {
 					return err

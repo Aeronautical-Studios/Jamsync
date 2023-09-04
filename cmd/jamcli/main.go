@@ -98,6 +98,8 @@ func main() {
 		jamcli.UnLock()
 	case os.Args[1] == "workon":
 		jamcli.WorkOn()
+	case os.Args[1] == "log":
+		jamcli.Log()
 	case os.Args[1] == "workspaces":
 		jamcli.ListWorkspaces()
 	case os.Args[1] == "projects":

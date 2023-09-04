@@ -6,6 +6,7 @@ import (
 
 	"github.com/zdgeier/jam/gen/jampb"
 	"github.com/zdgeier/jam/pkg/jamgrpc/serverauth"
+	"github.com/zdgeier/jam/pkg/jamstores/stores"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -272,4 +273,40 @@ func (s JamHub) GetProjectId(ctx context.Context, in *jampb.GetProjectIdRequest)
 	}
 
 	return &jampb.GetProjectIdResponse{ProjectId: projectId}, nil
+}
+
+func (s JamHub) GetLog(ctx context.Context, in *jampb.GetLogRequest) (*jampb.GetLogResponse, error) {
+	userId, err := serverauth.ParseIdFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	currentUsername, err := s.db.GetUsername(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	accessible, err := s.ProjectIdAccessible(in.GetOwnerUsername(), in.GetProjectId(), currentUsername)
+	if err != nil {
+		return nil, err
+	}
+
+	if !accessible {
+		return nil, errors.New("not an owner or collaborator of this project")
+	}
+
+	db, err := stores.GetProjectDB(in.GetOwnerUsername(), in.GetProjectId())
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	commitMessages, err := stores.GetLog(db)
+	if err != nil {
+		return nil, err
+	}
+
+	return &jampb.GetLogResponse{
+		CommitMessages: commitMessages,
+	}, nil
 }

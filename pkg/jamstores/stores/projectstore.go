@@ -364,3 +364,23 @@ func ListWorkspaces(db *sql.DB) (map[string]uint64, error) {
 
 	return data, err
 }
+
+func GetLog(db *sql.DB) ([]string, error) {
+	rows, err := db.Query("SELECT message FROM commits ORDER BY rowid DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := make([]string, 0)
+	for rows.Next() {
+		var message string
+		err = rows.Scan(&message)
+		if err != nil {
+			return nil, err
+		}
+		data = append(data, message)
+	}
+
+	return data, err
+}

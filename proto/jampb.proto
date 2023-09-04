@@ -13,6 +13,7 @@ service JamHub {
     rpc AddCollaborator(AddCollaboratorRequest) returns (AddCollaboratorResponse);
     rpc RemoveCollaborator(RemoveCollaboratorRequest) returns (RemoveCollaboratorResponse);
     rpc GetCollaborators(GetCollaboratorsRequest) returns (GetCollaboratorsResponse);
+    rpc GetLog(GetLogRequest) returns (GetLogResponse);
 
     // Change operations
     rpc UpdateWorkspace(UpdateWorkspaceRequest) returns (UpdateWorkspaceResponse);
@@ -204,6 +205,14 @@ message CreateWorkspaceRequest {
 }
 message CreateWorkspaceResponse {
     uint64 workspace_id = 1;
+}
+
+message GetLogRequest {
+    string owner_username = 2;
+    uint64 project_id = 3;
+}
+message GetLogResponse {
+    repeated string commit_messages = 1;
 }
 
 message ListWorkspacesRequest {

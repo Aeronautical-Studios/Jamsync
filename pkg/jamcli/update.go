@@ -36,7 +36,7 @@ func Update() {
 	apiClient := jampb.NewJamHubClient(conn)
 
 	if state.CommitInfo != nil {
-		fmt.Println("Currently on the mainline, use `workon` to make changes.")
+		fmt.Println("Currently on the mainline, use `workon` to update a workspace.")
 		os.Exit(1)
 	}
 

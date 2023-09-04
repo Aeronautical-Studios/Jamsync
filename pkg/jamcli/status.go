@@ -80,7 +80,6 @@ func Status() {
 				}
 			} else {
 				fmt.Println("\nNo local or remote changes.")
-
 			}
 		} else if changeResp.ChangeId > state.WorkspaceInfo.ChangeId {
 			fileMetadata := ReadLocalFileList()
